@@ -1,4 +1,4 @@
-# 課序
+# 你並沒有那麼聰明
 
 學校行程整理：課程、作業、考試、讀書進度。以 PWA 形式發佈在 GitHub Pages，帳號與資料存在 Supabase。
 
@@ -32,7 +32,7 @@
 ## 更新
 
 推到 `main` 後，GitHub Actions 會自動建置並部署（`.github/workflows/deploy.yml`）。
-使用者下次開啟 App 時會看到「課序有新版本」，點「立即更新」即可，資料不受影響。
+使用者下次開啟 App 時會看到「有新版本可以更新」，點「立即更新」即可，資料不受影響。
 
 更新偵測靠 `scripts/generate-sw.mjs` 在建置後產生的 `out/sw.js`：快取名稱是所有輸出檔案內容的雜湊，內容有變就會產生新版 service worker。
 

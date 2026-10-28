@@ -125,7 +125,7 @@ function MainApp({ me }: { me: string }) {
         <header className="animate-fade-up">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <p className="font-display text-4xl tracking-tight text-ink sm:text-5xl">課序</p>
+              <p className="font-display text-3xl tracking-tight text-ink sm:text-5xl">你並沒有那麼聰明</p>
               <p className="mt-2 max-w-md text-sm leading-relaxed text-muted-foreground sm:text-base">
                 學校的課程、作業、考試，加上每天的生活狀態，收在同一個地方。
               </p>

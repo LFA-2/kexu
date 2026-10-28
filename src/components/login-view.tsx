@@ -38,7 +38,7 @@ export function LoginView() {
 
   return (
     <div className="mx-auto flex min-h-full w-full max-w-sm flex-col justify-center px-5 py-12">
-      <p className="font-display text-5xl tracking-tight text-ink">課序</p>
+      <p className="font-display text-4xl tracking-tight text-ink sm:text-5xl">你並沒有那麼聰明</p>
       <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
         把學校行程收成一條清楚的時間線——課程、作業、考試、讀書進度。
       </p>

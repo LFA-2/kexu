@@ -30,7 +30,7 @@ export async function shareOrDownloadBackup(state: SchoolState) {
   // iOS standalone apps ignore <a download>; the share sheet offers "Save to Files".
   if (navigator.canShare?.({ files: [file] })) {
     try {
-      await navigator.share({ files: [file], title: "課序備份" });
+      await navigator.share({ files: [file], title: "你並沒有那麼聰明的備份" });
       return;
     } catch (error) {
       if ((error as DOMException).name === "AbortError") return;

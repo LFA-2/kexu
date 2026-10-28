@@ -6,8 +6,8 @@ const base = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "課序",
-    short_name: "課序",
+    name: "你並沒有那麼聰明",
+    short_name: "你並沒有那麼聰明",
     description: "把課程、作業、考試與讀書進度收成一條清楚的時間線。",
     id: `${base}/`,
     start_url: `${base}/`,

@@ -60,7 +60,7 @@ export function UpdateBanner() {
 
   return (
     <div className="fixed inset-x-3 top-3 z-50 mx-auto flex max-w-md items-center gap-3 rounded-2xl border border-teal-700/30 bg-white px-4 py-3 shadow-lg">
-      <p className="flex-1 text-sm text-ink">課序有新版本</p>
+      <p className="flex-1 text-sm text-ink">有新版本可以更新</p>
       <Button size="sm" onClick={() => waiting.postMessage("SKIP_WAITING")}>
         立即更新
       </Button>

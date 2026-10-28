@@ -13,7 +13,7 @@ export function DataTools() {
   async function onImport(file: File) {
     const next = parseBackup(await file.text());
     if (!next) {
-      alert("這不是有效的課序備份檔。");
+      alert("這不是有效的備份檔。");
       return;
     }
     const summary = `${next.courses.length} 門課、${next.homework.length} 項作業、${next.exams.length} 場考試`;
