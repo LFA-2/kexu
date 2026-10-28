@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { DataTools } from "@/components/data-tools";
+import { InstallHint, UpdateBanner } from "@/components/pwa";
 import { CoursesView } from "@/components/school/courses-view";
 import { ProgressView } from "@/components/school/progress-view";
 import { TimelineView } from "@/components/school/timeline-view";
@@ -15,13 +17,6 @@ const NAV: { id: SchoolView; label: string; icon: typeof BookOpen }[] = [
   { id: "exams", label: "考試", icon: GraduationCap },
 ];
 
-const SYNC_LABEL = {
-  loading: "連線中…",
-  synced: "已同步",
-  saving: "儲存中…",
-  offline: "無法連到伺服器",
-} as const;
-
 export function AppShell() {
   return (
     <SchoolProvider>
@@ -34,7 +29,7 @@ function AppShellInner() {
   const [category, setCategory] = useState<Category>("school");
   const [view, setView] = useState<SchoolView>("courses");
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
-  const { syncStatus } = useSchool();
+  const { hydrated } = useSchool();
 
   function goView(next: SchoolView) {
     setView(next);
@@ -43,6 +38,7 @@ function AppShellInner() {
 
   return (
     <div className="relative min-h-full bg-background">
+      <UpdateBanner />
       <div className="relative mx-auto flex min-h-full max-w-5xl flex-col px-4 pb-24 pt-6 sm:px-6 sm:pb-10 sm:pt-8">
         <header className="animate-fade-up">
           <div className="flex flex-wrap items-start justify-between gap-4">
@@ -65,6 +61,7 @@ function AppShellInner() {
               />
             </div>
           </div>
+          <InstallHint />
         </header>
 
         {category === "life" ? (
@@ -98,22 +95,24 @@ function AppShellInner() {
             </nav>
 
             <main className="animate-fade-up mt-8 flex-1" style={{ animationDelay: "100ms" }}>
-              {view === "courses" && (
-                <CoursesView
-                  selectedCourseId={selectedCourseId}
-                  onSelectCourse={setSelectedCourseId}
-                />
+              {hydrated && (
+                <>
+                  {view === "courses" && (
+                    <CoursesView
+                      selectedCourseId={selectedCourseId}
+                      onSelectCourse={setSelectedCourseId}
+                    />
+                  )}
+                  {view === "progress" && <ProgressView />}
+                  {view === "homework" && <TimelineView kind="homework" />}
+                  {view === "exams" && <TimelineView kind="exam" />}
+                </>
               )}
-              {view === "progress" && <ProgressView />}
-              {view === "homework" && <TimelineView kind="homework" />}
-              {view === "exams" && <TimelineView kind="exam" />}
             </main>
 
-            <div className="mt-10 flex items-center justify-between border-t border-border/60 pt-4 text-xs text-muted-foreground">
-              <span>資料存在 lipang，所有 Tailscale 裝置共用同一份。</span>
-              <span className={syncStatus === "offline" ? "text-destructive" : undefined}>
-                {SYNC_LABEL[syncStatus]}
-              </span>
+            <div className="mt-10 flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-4 text-xs text-muted-foreground">
+              <span>資料只存在這台裝置上，記得定期匯出備份。</span>
+              <DataTools />
             </div>
           </>
         )}

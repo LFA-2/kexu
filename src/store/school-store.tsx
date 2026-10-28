@@ -5,28 +5,25 @@ import {
   useCallback,
   useContext,
   useEffect,
-  useRef,
-  useState,
+  useSyncExternalStore,
   type ReactNode,
 } from "react";
 import {
   EMPTY_STATE,
+  isSchoolState,
   type Course,
   type Exam,
   type Homework,
   type SchoolState,
-  type StoredState,
 } from "@/lib/types";
 import { uid } from "@/lib/utils";
 
-const POLL_MS = 5000;
-
-type SyncStatus = "loading" | "synced" | "saving" | "offline";
+const STORAGE_KEY = "kexu-school-v1";
 
 type Updater = (prev: SchoolState) => SchoolState;
 
 type SchoolStore = SchoolState & {
-  syncStatus: SyncStatus;
+  hydrated: boolean;
   addCourse: (name: string, color: string) => void;
   removeCourse: (id: string) => void;
   addHomework: (input: Omit<Homework, "id" | "createdAt" | "done">) => void;
@@ -38,119 +35,86 @@ type SchoolStore = SchoolState & {
   addProgressUnit: (courseId: string, title: string) => void;
   toggleProgressUnit: (id: string) => void;
   removeProgressUnit: (id: string) => void;
+  replaceAll: (state: SchoolState) => void;
   courseProgress: (courseId: string) => { total: number; done: number; pct: number };
 };
 
 const SchoolContext = createContext<SchoolStore | null>(null);
 
-async function fetchStored(): Promise<StoredState> {
-  const res = await fetch("/api/state", { cache: "no-store" });
-  if (!res.ok) throw new Error(`GET /api/state ${res.status}`);
-  return res.json();
+let cache: SchoolState | null = null;
+const listeners = new Set<() => void>();
+
+function emit() {
+  for (const listener of listeners) listener();
 }
 
-async function putStored(baseVersion: number, state: SchoolState) {
-  const res = await fetch("/api/state", {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ baseVersion, state }),
-  });
-  if (res.status !== 200 && res.status !== 409) {
-    throw new Error(`PUT /api/state ${res.status}`);
+function readStorage(): SchoolState {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed: unknown = JSON.parse(raw);
+      if (isSchoolState(parsed)) return parsed;
+    }
+  } catch {
+    // corrupted or unavailable storage: start empty
   }
-  return { conflict: res.status === 409, stored: (await res.json()) as StoredState };
+  return EMPTY_STATE;
 }
+
+function getSnapshot() {
+  cache ??= readStorage();
+  return cache;
+}
+
+function getServerSnapshot() {
+  return EMPTY_STATE;
+}
+
+function onStorage(event: StorageEvent) {
+  if (event.key !== STORAGE_KEY) return;
+  cache = null;
+  emit();
+}
+
+function subscribe(listener: () => void) {
+  listeners.add(listener);
+  if (listeners.size === 1) window.addEventListener("storage", onStorage);
+  return () => {
+    listeners.delete(listener);
+    if (listeners.size === 0) window.removeEventListener("storage", onStorage);
+  };
+}
+
+function writeState(next: SchoolState) {
+  cache = next;
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+  emit();
+}
+
+function mutate(updater: Updater) {
+  writeState(updater(getSnapshot()));
+}
+
+const noopSubscribe = () => () => {};
 
 export function SchoolProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<SchoolState>(EMPTY_STATE);
-  const [syncStatus, setSyncStatus] = useState<SyncStatus>("loading");
-
-  const serverRef = useRef<StoredState>({ version: -1, state: EMPTY_STATE });
-  const pendingRef = useRef(0);
-  const queueRef = useRef<Promise<void>>(Promise.resolve());
-
-  const adopt = useCallback((stored: StoredState) => {
-    serverRef.current = stored;
-    setState(stored.state);
-  }, []);
-
-  const refresh = useCallback(async () => {
-    if (pendingRef.current > 0) return;
-    try {
-      const stored = await fetchStored();
-      if (pendingRef.current > 0) return;
-      if (stored.version !== serverRef.current.version) adopt(stored);
-      setSyncStatus("synced");
-    } catch {
-      setSyncStatus("offline");
-    }
-  }, [adopt]);
+  const state = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  const hydrated = useSyncExternalStore(noopSubscribe, () => true, () => false);
 
   useEffect(() => {
-    const first = setTimeout(refresh, 0);
-    const timer = setInterval(() => {
-      if (document.visibilityState === "visible") refresh();
-    }, POLL_MS);
-    const onVisible = () => {
-      if (document.visibilityState === "visible") refresh();
+    // Ask Safari not to evict this origin's storage under pressure.
+    navigator.storage?.persist?.().catch(() => {});
+  }, []);
+
+  const addCourse = useCallback((name: string, color: string) => {
+    const course: Course = {
+      id: uid("course"),
+      name: name.trim(),
+      color,
+      createdAt: new Date().toISOString(),
     };
-    document.addEventListener("visibilitychange", onVisible);
-    window.addEventListener("focus", onVisible);
-    return () => {
-      clearTimeout(first);
-      clearInterval(timer);
-      document.removeEventListener("visibilitychange", onVisible);
-      window.removeEventListener("focus", onVisible);
-    };
-  }, [refresh]);
-
-  const mutate = useCallback(
-    (updater: Updater) => {
-      setState((prev) => updater(prev));
-      pendingRef.current += 1;
-      setSyncStatus("saving");
-
-      // Re-apply the updater to the server's copy so concurrent edits from
-      // other devices are merged instead of overwritten.
-      queueRef.current = queueRef.current.then(async () => {
-        try {
-          let base = serverRef.current;
-          for (let attempt = 0; attempt < 5; attempt++) {
-            const { conflict, stored } = await putStored(
-              base.version,
-              updater(base.state),
-            );
-            serverRef.current = stored;
-            if (!conflict) break;
-            base = stored;
-          }
-          pendingRef.current -= 1;
-          if (pendingRef.current === 0) {
-            setState(serverRef.current.state);
-            setSyncStatus("synced");
-          }
-        } catch {
-          pendingRef.current -= 1;
-          setSyncStatus("offline");
-          if (pendingRef.current === 0) setState(serverRef.current.state);
-        }
-      });
-    },
-    [],
-  );
-
-  const addCourse = useCallback(
-    (name: string, color: string) => {
-      const course: Course = {
-        id: uid("course"),
-        name: name.trim(),
-        color,
-        createdAt: new Date().toISOString(),
-      };
-      mutate((prev) => ({ ...prev, courses: [...prev.courses, course] }));
-    },
-    [mutate],
-  );
+    mutate((prev) => ({ ...prev, courses: [...prev.courses, course] }));
+  }, []);
 
   const removeCourse = useCallback(
     (id: string) =>
@@ -160,21 +124,18 @@ export function SchoolProvider({ children }: { children: ReactNode }) {
         exams: prev.exams.filter((e) => e.courseId !== id),
         progress: prev.progress.filter((p) => p.courseId !== id),
       })),
-    [mutate],
+    [],
   );
 
-  const addHomework = useCallback(
-    (input: Omit<Homework, "id" | "createdAt" | "done">) => {
-      const item: Homework = {
-        ...input,
-        id: uid("hw"),
-        done: false,
-        createdAt: new Date().toISOString(),
-      };
-      mutate((prev) => ({ ...prev, homework: [...prev.homework, item] }));
-    },
-    [mutate],
-  );
+  const addHomework = useCallback((input: Omit<Homework, "id" | "createdAt" | "done">) => {
+    const item: Homework = {
+      ...input,
+      id: uid("hw"),
+      done: false,
+      createdAt: new Date().toISOString(),
+    };
+    mutate((prev) => ({ ...prev, homework: [...prev.homework, item] }));
+  }, []);
 
   const toggleHomework = useCallback(
     (id: string) =>
@@ -182,27 +143,24 @@ export function SchoolProvider({ children }: { children: ReactNode }) {
         ...prev,
         homework: prev.homework.map((h) => (h.id === id ? { ...h, done: !h.done } : h)),
       })),
-    [mutate],
+    [],
   );
 
   const removeHomework = useCallback(
     (id: string) =>
       mutate((prev) => ({ ...prev, homework: prev.homework.filter((h) => h.id !== id) })),
-    [mutate],
+    [],
   );
 
-  const addExam = useCallback(
-    (input: Omit<Exam, "id" | "createdAt" | "done">) => {
-      const item: Exam = {
-        ...input,
-        id: uid("ex"),
-        done: false,
-        createdAt: new Date().toISOString(),
-      };
-      mutate((prev) => ({ ...prev, exams: [...prev.exams, item] }));
-    },
-    [mutate],
-  );
+  const addExam = useCallback((input: Omit<Exam, "id" | "createdAt" | "done">) => {
+    const item: Exam = {
+      ...input,
+      id: uid("ex"),
+      done: false,
+      createdAt: new Date().toISOString(),
+    };
+    mutate((prev) => ({ ...prev, exams: [...prev.exams, item] }));
+  }, []);
 
   const toggleExam = useCallback(
     (id: string) =>
@@ -210,36 +168,31 @@ export function SchoolProvider({ children }: { children: ReactNode }) {
         ...prev,
         exams: prev.exams.map((e) => (e.id === id ? { ...e, done: !e.done } : e)),
       })),
-    [mutate],
+    [],
   );
 
   const removeExam = useCallback(
     (id: string) =>
       mutate((prev) => ({ ...prev, exams: prev.exams.filter((e) => e.id !== id) })),
-    [mutate],
+    [],
   );
 
-  const addProgressUnit = useCallback(
-    (courseId: string, title: string) => {
-      const id = uid("pu");
-      const createdAt = new Date().toISOString();
-      mutate((prev) => ({
-        ...prev,
-        progress: [
-          ...prev.progress,
-          {
-            id,
-            courseId,
-            title: title.trim(),
-            completed: false,
-            order: prev.progress.filter((p) => p.courseId === courseId).length,
-            createdAt,
-          },
-        ],
-      }));
-    },
-    [mutate],
-  );
+  const addProgressUnit = useCallback((courseId: string, title: string) => {
+    mutate((prev) => ({
+      ...prev,
+      progress: [
+        ...prev.progress,
+        {
+          id: uid("pu"),
+          courseId,
+          title: title.trim(),
+          completed: false,
+          order: prev.progress.filter((p) => p.courseId === courseId).length,
+          createdAt: new Date().toISOString(),
+        },
+      ],
+    }));
+  }, []);
 
   const toggleProgressUnit = useCallback(
     (id: string) =>
@@ -249,14 +202,16 @@ export function SchoolProvider({ children }: { children: ReactNode }) {
           p.id === id ? { ...p, completed: !p.completed } : p,
         ),
       })),
-    [mutate],
+    [],
   );
 
   const removeProgressUnit = useCallback(
     (id: string) =>
       mutate((prev) => ({ ...prev, progress: prev.progress.filter((p) => p.id !== id) })),
-    [mutate],
+    [],
   );
+
+  const replaceAll = useCallback((next: SchoolState) => writeState(next), []);
 
   const courseProgress = useCallback(
     (courseId: string) => {
@@ -270,7 +225,7 @@ export function SchoolProvider({ children }: { children: ReactNode }) {
 
   const value: SchoolStore = {
     ...state,
-    syncStatus,
+    hydrated,
     addCourse,
     removeCourse,
     addHomework,
@@ -282,6 +237,7 @@ export function SchoolProvider({ children }: { children: ReactNode }) {
     addProgressUnit,
     toggleProgressUnit,
     removeProgressUnit,
+    replaceAll,
     courseProgress,
   };
 

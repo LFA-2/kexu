@@ -43,11 +43,6 @@ export type SchoolState = {
   progress: ProgressUnit[];
 };
 
-export type StoredState = {
-  version: number;
-  state: SchoolState;
-};
-
 export const COURSE_COLORS = [
   { name: "湖綠", value: "#0F766E" },
   { name: "午夜藍", value: "#1E3A5F" },

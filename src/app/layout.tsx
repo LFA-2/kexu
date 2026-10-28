@@ -16,6 +16,11 @@ const sans = Noto_Sans_TC({
 export const metadata: Metadata = {
   title: "課序",
   description: "把課程、作業、考試與讀書進度收成一條清楚的時間線。",
+  appleWebApp: {
+    capable: true,
+    title: "課序",
+    statusBarStyle: "default",
+  },
 };
 
 export const viewport: Viewport = {
