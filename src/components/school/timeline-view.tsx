@@ -1,19 +1,28 @@
 "use client";
 
 import { useMemo } from "react";
+import { CheckButton } from "@/components/school/course-detail-view";
 import { CourseDot } from "@/components/school/course-dot";
 import { MonthCalendar } from "@/components/school/month-calendar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatShortDate, relativeStatus } from "@/lib/dates";
 import { useSchool } from "@/store/school-store";
-import { Check, Trash2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
 
 type Kind = "homework" | "exam";
 
 export function TimelineView({ kind }: { kind: Kind }) {
-  const { courses, homework, exams, toggleHomework, toggleExam, removeHomework, removeExam } =
-    useSchool();
+  const {
+    courses,
+    homework,
+    exams,
+    readOnly,
+    toggleHomework,
+    toggleExam,
+    removeHomework,
+    removeExam,
+  } = useSchool();
 
   const title = kind === "homework" ? "作業" : "考試";
   const subtitle =
@@ -71,14 +80,16 @@ export function TimelineView({ kind }: { kind: Kind }) {
         <h2 className="font-display mt-1 text-2xl tracking-tight text-ink sm:text-3xl">
           {title}
         </h2>
-        <p className="mt-2 text-xs text-muted-foreground">新增請到「課程」→ 點進各門課。</p>
+        {!readOnly && (
+          <p className="mt-2 text-xs text-muted-foreground">新增請到「課程」→ 點進各門課。</p>
+        )}
       </header>
 
       <MonthCalendar colorsByDate={colorsByDate} />
 
       {courses.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border bg-white px-6 py-12 text-center text-sm text-muted-foreground">
-          請先到「課程」新增課程。
+          {readOnly ? "還沒有任何課程。" : "請先到「課程」新增課程。"}
         </div>
       ) : (
         <div className="space-y-8">
@@ -116,19 +127,13 @@ export function TimelineView({ kind }: { kind: Kind }) {
                           }`}
                         >
                           <div className="flex items-start gap-3">
-                            <button
-                              type="button"
-                              onClick={() => toggle(item.id)}
-                              className={`mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full border transition-colors ${
-                                item.done
-                                  ? "border-transparent text-white"
-                                  : "border-border text-muted-foreground hover:border-teal-700"
-                              }`}
-                              style={item.done ? { backgroundColor: course.color } : undefined}
-                              aria-pressed={item.done}
-                            >
-                              <Check className="size-3.5" />
-                            </button>
+                            <CheckButton
+                              done={item.done}
+                              color={course.color}
+                              readOnly={readOnly}
+                              onToggle={() => toggle(item.id)}
+                              className="mt-0.5"
+                            />
                             <div className="min-w-0 flex-1">
                               <div className="flex flex-wrap items-center gap-2">
                                 <span
@@ -145,15 +150,17 @@ export function TimelineView({ kind }: { kind: Kind }) {
                                 {item.note ? ` · ${item.note}` : ""}
                               </p>
                             </div>
-                            <Button
-                              variant="ghost"
-                              size="icon-xs"
-                              className="text-muted-foreground"
-                              onClick={() => remove(item.id)}
-                              aria-label={`刪除${title}`}
-                            >
-                              <Trash2 />
-                            </Button>
+                            {!readOnly && (
+                              <Button
+                                variant="ghost"
+                                size="icon-xs"
+                                className="text-muted-foreground"
+                                onClick={() => remove(item.id)}
+                                aria-label={`刪除${title}`}
+                              >
+                                <Trash2 />
+                              </Button>
+                            )}
                           </div>
                         </div>
                       </li>

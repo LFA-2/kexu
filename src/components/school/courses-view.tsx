@@ -12,7 +12,7 @@ export function CoursesView({
   selectedCourseId: string | null;
   onSelectCourse: (id: string | null) => void;
 }) {
-  const { courses, homework, exams, courseProgress } = useSchool();
+  const { courses, homework, exams, courseProgress, readOnly } = useSchool();
 
   if (selectedCourseId) {
     return (
@@ -24,20 +24,24 @@ export function CoursesView({
     <div className="space-y-8">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-sm text-muted-foreground">點進課程管理細節</p>
+          <p className="text-sm text-muted-foreground">
+            {readOnly ? "點進課程查看細節" : "點進課程管理細節"}
+          </p>
           <h2 className="font-display mt-1 text-2xl tracking-tight text-ink sm:text-3xl">
-            我的課程
+            {readOnly ? "課程" : "我的課程"}
           </h2>
         </div>
-        <AddCourseDialog />
+        {!readOnly && <AddCourseDialog />}
       </header>
 
       {courses.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border bg-white px-6 py-16 text-center">
           <p className="font-display text-xl text-ink">還沒有任何課程</p>
-          <p className="mt-2 text-sm text-muted-foreground">
-            新增第一門課後，可在課程內加入作業、考試與讀書單元。
-          </p>
+          {!readOnly && (
+            <p className="mt-2 text-sm text-muted-foreground">
+              新增第一門課後，可在課程內加入作業、考試與讀書單元。
+            </p>
+          )}
         </div>
       ) : (
         <ul className="grid gap-3 sm:grid-cols-2">

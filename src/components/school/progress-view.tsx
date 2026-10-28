@@ -1,17 +1,18 @@
 "use client";
 
+import { CheckButton } from "@/components/school/course-detail-view";
 import { Button } from "@/components/ui/button";
 import { useSchool } from "@/store/school-store";
-import { Check, Trash2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
 
 export function ProgressView() {
-  const { courses, progress, courseProgress, toggleProgressUnit, removeProgressUnit } =
+  const { courses, progress, readOnly, courseProgress, toggleProgressUnit, removeProgressUnit } =
     useSchool();
 
   if (courses.length === 0) {
     return (
       <div className="rounded-2xl border border-dashed border-border bg-white px-6 py-16 text-center text-sm text-muted-foreground">
-        請先到「課程」新增課程，再於課程內加入讀書單元。
+        {readOnly ? "還沒有任何課程。" : "請先到「課程」新增課程，再於課程內加入讀書單元。"}
       </div>
     );
   }
@@ -23,7 +24,9 @@ export function ProgressView() {
         <h2 className="font-display mt-1 text-2xl tracking-tight text-ink sm:text-3xl">
           讀書進度
         </h2>
-        <p className="mt-2 text-xs text-muted-foreground">新增單元請到「課程」→ 點進各門課。</p>
+        {!readOnly && (
+          <p className="mt-2 text-xs text-muted-foreground">新增單元請到「課程」→ 點進各門課。</p>
+        )}
       </header>
 
       <div className="space-y-6">
@@ -77,7 +80,7 @@ export function ProgressView() {
 
               {units.length === 0 ? (
                 <p className="mt-4 text-sm text-muted-foreground">
-                  尚未新增單元。請到課程詳情頁新增。
+                  {readOnly ? "尚未新增單元。" : "尚未新增單元。請到課程詳情頁新增。"}
                 </p>
               ) : (
                 <ul className="mt-4 space-y-2">
@@ -86,20 +89,12 @@ export function ProgressView() {
                       key={unit.id}
                       className="flex items-center gap-3 rounded-xl border border-border/60 bg-slate-50/60 px-3 py-2.5"
                     >
-                      <button
-                        type="button"
-                        onClick={() => toggleProgressUnit(unit.id)}
-                        className={`flex size-7 shrink-0 items-center justify-center rounded-full border transition-colors ${
-                          unit.completed
-                            ? "border-transparent text-white"
-                            : "border-border text-muted-foreground hover:border-teal-700"
-                        }`}
-                        style={unit.completed ? { backgroundColor: course.color } : undefined}
-                        aria-pressed={unit.completed}
-                        aria-label={unit.completed ? "標記未完成" : "標記完成"}
-                      >
-                        <Check className="size-3.5" />
-                      </button>
+                      <CheckButton
+                        done={unit.completed}
+                        color={course.color}
+                        readOnly={readOnly}
+                        onToggle={() => toggleProgressUnit(unit.id)}
+                      />
                       <span
                         className={`min-w-0 flex-1 text-sm ${
                           unit.completed ? "text-muted-foreground line-through" : "text-ink"
@@ -107,15 +102,17 @@ export function ProgressView() {
                       >
                         {unit.title}
                       </span>
-                      <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        className="text-muted-foreground"
-                        onClick={() => removeProgressUnit(unit.id)}
-                        aria-label="刪除單元"
-                      >
-                        <Trash2 />
-                      </Button>
+                      {!readOnly && (
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          className="text-muted-foreground"
+                          onClick={() => removeProgressUnit(unit.id)}
+                          aria-label="刪除單元"
+                        >
+                          <Trash2 />
+                        </Button>
+                      )}
                     </li>
                   ))}
                 </ul>

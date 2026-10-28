@@ -20,6 +20,7 @@ export function CourseDetailView({
     homework,
     exams,
     progress,
+    readOnly,
     courseProgress,
     toggleHomework,
     toggleExam,
@@ -61,20 +62,22 @@ export function CourseDetailView({
           <ArrowLeft data-icon="inline-start" />
           返回課程列表
         </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="text-muted-foreground hover:text-destructive"
-          onClick={() => {
-            if (confirm(`確定刪除「${course.name}」及其所有內容？`)) {
-              removeCourse(course.id);
-              onBack();
-            }
-          }}
-        >
-          <Trash2 className="size-3.5" />
-          刪除課程
-        </Button>
+        {!readOnly && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-muted-foreground hover:text-destructive"
+            onClick={() => {
+              if (confirm(`確定刪除「${course.name}」及其所有內容？`)) {
+                removeCourse(course.id);
+                onBack();
+              }
+            }}
+          >
+            <Trash2 className="size-3.5" />
+            刪除課程
+          </Button>
+        )}
       </div>
 
       <header>
@@ -84,9 +87,11 @@ export function CourseDetailView({
             {course.name}
           </h2>
         </div>
-        <p className="mt-2 text-sm text-muted-foreground">
-          在這裡新增與管理作業、考試、讀書單元。
-        </p>
+        {!readOnly && (
+          <p className="mt-2 text-sm text-muted-foreground">
+            在這裡新增與管理作業、考試、讀書單元。
+          </p>
+        )}
         <div
           className="mt-4 h-2.5 overflow-hidden rounded-full bg-slate-100"
           role="progressbar"
@@ -104,7 +109,10 @@ export function CourseDetailView({
         </p>
       </header>
 
-      <DetailSection title="作業" action={<AddItemDialog kind="homework" courseId={course.id} />}>
+      <DetailSection
+        title="作業"
+        action={readOnly ? null : <AddItemDialog kind="homework" courseId={course.id} />}
+      >
         {hw.length === 0 ? (
           <EmptyLine text="尚未新增作業" />
         ) : (
@@ -117,6 +125,7 @@ export function CourseDetailView({
                 note={item.note}
                 done={item.done}
                 color={course.color}
+                readOnly={readOnly}
                 onToggle={() => toggleHomework(item.id)}
                 onRemove={() => removeHomework(item.id)}
               />
@@ -125,7 +134,10 @@ export function CourseDetailView({
         )}
       </DetailSection>
 
-      <DetailSection title="考試" action={<AddItemDialog kind="exam" courseId={course.id} />}>
+      <DetailSection
+        title="考試"
+        action={readOnly ? null : <AddItemDialog kind="exam" courseId={course.id} />}
+      >
         {ex.length === 0 ? (
           <EmptyLine text="尚未新增考試" />
         ) : (
@@ -138,6 +150,7 @@ export function CourseDetailView({
                 note={item.note}
                 done={item.done}
                 color={course.color}
+                readOnly={readOnly}
                 onToggle={() => toggleExam(item.id)}
                 onRemove={() => removeExam(item.id)}
               />
@@ -148,7 +161,7 @@ export function CourseDetailView({
 
       <DetailSection
         title="讀書進度"
-        action={<AddItemDialog kind="progress" courseId={course.id} />}
+        action={readOnly ? null : <AddItemDialog kind="progress" courseId={course.id} />}
       >
         {units.length === 0 ? (
           <EmptyLine text="尚未新增讀書單元" />
@@ -159,19 +172,12 @@ export function CourseDetailView({
                 key={unit.id}
                 className="flex items-center gap-3 rounded-xl border border-border/60 bg-white px-3 py-2.5"
               >
-                <button
-                  type="button"
-                  onClick={() => toggleProgressUnit(unit.id)}
-                  className={`flex size-7 shrink-0 items-center justify-center rounded-full border transition-colors ${
-                    unit.completed
-                      ? "border-transparent text-white"
-                      : "border-border text-muted-foreground"
-                  }`}
-                  style={unit.completed ? { backgroundColor: course.color } : undefined}
-                  aria-pressed={unit.completed}
-                >
-                  <Check className="size-3.5" />
-                </button>
+                <CheckButton
+                  done={unit.completed}
+                  color={course.color}
+                  readOnly={readOnly}
+                  onToggle={() => toggleProgressUnit(unit.id)}
+                />
                 <span
                   className={`min-w-0 flex-1 text-sm ${
                     unit.completed ? "text-muted-foreground line-through" : "text-ink"
@@ -179,21 +185,55 @@ export function CourseDetailView({
                 >
                   {unit.title}
                 </span>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  className="text-muted-foreground"
-                  onClick={() => removeProgressUnit(unit.id)}
-                  aria-label="刪除單元"
-                >
-                  <Trash2 />
-                </Button>
+                {!readOnly && (
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    className="text-muted-foreground"
+                    onClick={() => removeProgressUnit(unit.id)}
+                    aria-label="刪除單元"
+                  >
+                    <Trash2 />
+                  </Button>
+                )}
               </li>
             ))}
           </ul>
         )}
       </DetailSection>
     </div>
+  );
+}
+
+export function CheckButton({
+  done,
+  color,
+  readOnly,
+  onToggle,
+  className = "",
+}: {
+  done: boolean;
+  color: string;
+  readOnly: boolean;
+  onToggle: () => void;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      disabled={readOnly}
+      className={`flex size-7 shrink-0 items-center justify-center rounded-full border transition-colors disabled:cursor-default ${
+        done
+          ? "border-transparent text-white"
+          : `border-border text-muted-foreground ${readOnly ? "" : "hover:border-teal-700"}`
+      } ${className}`}
+      style={done ? { backgroundColor: color } : undefined}
+      aria-pressed={done}
+      aria-label={done ? "已完成" : "未完成"}
+    >
+      <Check className="size-3.5" />
+    </button>
   );
 }
 
@@ -231,6 +271,7 @@ function ItemRow({
   note,
   done,
   color,
+  readOnly,
   onToggle,
   onRemove,
 }: {
@@ -239,23 +280,20 @@ function ItemRow({
   note: string;
   done: boolean;
   color: string;
+  readOnly: boolean;
   onToggle: () => void;
   onRemove: () => void;
 }) {
   const status = relativeStatus(date, done);
   return (
     <li className="flex items-start gap-3 rounded-xl border border-border/60 bg-slate-50/60 px-3 py-3">
-      <button
-        type="button"
-        onClick={onToggle}
-        className={`mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full border transition-colors ${
-          done ? "border-transparent text-white" : "border-border text-muted-foreground"
-        }`}
-        style={done ? { backgroundColor: color } : undefined}
-        aria-pressed={done}
-      >
-        <Check className="size-3.5" />
-      </button>
+      <CheckButton
+        done={done}
+        color={color}
+        readOnly={readOnly}
+        onToggle={onToggle}
+        className="mt-0.5"
+      />
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <span
@@ -275,15 +313,17 @@ function ItemRow({
           {note ? ` · ${note}` : ""}
         </p>
       </div>
-      <Button
-        variant="ghost"
-        size="icon-xs"
-        className="text-muted-foreground"
-        onClick={onRemove}
-        aria-label="刪除"
-      >
-        <Trash2 />
-      </Button>
+      {!readOnly && (
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          className="text-muted-foreground"
+          onClick={onRemove}
+          aria-label="刪除"
+        >
+          <Trash2 />
+        </Button>
+      )}
     </li>
   );
 }

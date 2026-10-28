@@ -17,7 +17,7 @@ export function DataTools() {
       return;
     }
     const summary = `${next.courses.length} 門課、${next.homework.length} 項作業、${next.exams.length} 場考試`;
-    if (confirm(`匯入後會取代這台裝置上目前的資料。\n備份內容：${summary}\n確定匯入？`)) {
+    if (confirm(`匯入後會取代你帳號裡目前的資料。\n備份內容：${summary}\n確定匯入？`)) {
       replaceAll(next);
     }
   }

@@ -94,7 +94,7 @@ export function InstallHint() {
     <div className="mt-6 flex items-start gap-3 rounded-2xl border border-border/70 bg-white px-4 py-3 text-sm text-ink">
       <Share className="mt-0.5 size-4 shrink-0 text-teal-700" />
       <p className="flex-1 leading-relaxed">
-        安裝到 iPhone：點 Safari 下方的「分享」，再選「加入主畫面」。資料只存在這支手機裡。
+        安裝到 iPhone：點 Safari 下方的「分享」，再選「加入主畫面」，登入同一個帳號就能看到同一份資料。
       </p>
       <button
         type="button"
