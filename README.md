@@ -1,36 +1,30 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 課序
 
-## Getting Started
+學校行程整理：課程、作業、考試、讀書進度。跑在 `lipang` 上，透過 Tailscale 讓自己的所有裝置共用同一份資料。
 
-First, run the development server:
+## 使用
+
+在任何已登入 Tailscale 的裝置打開 <http://lipang:43127>（或 <http://100.124.35.79:43127>）。
+
+## 資料
+
+- 存在 `data/school.json`（每次寫入前會備份到 `school.json.bak`）
+- 備份：直接複製 `data/` 資料夾即可
+
+## 伺服器
+
+以 systemd user service 執行（`~/.config/systemd/user/kexu.service`）：
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+systemctl --user status kexu      # 狀態
+systemctl --user restart kexu     # 重啟
+journalctl --user -u kexu -f      # 看 log
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+改完程式後：
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm run build && systemctl --user restart kexu
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+本機開發：`npm run dev`（<http://127.0.0.1:43127>）。注意它和正式服務讀寫的是同一個 `data/school.json`。
