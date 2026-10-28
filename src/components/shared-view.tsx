@@ -2,9 +2,10 @@
 
 import { useMemo, type ReactNode } from "react";
 import { addDays, parseISO } from "date-fns";
+import { DayTimeline, timelineRange } from "@/components/day-timeline";
 import { MonthCalendar } from "@/components/month-calendar";
 import { formatShortDate, toDateKey } from "@/lib/dates";
-import { METRICS } from "@/lib/life";
+import { METRICS, sortSchedule } from "@/lib/life";
 import { usePeopleData, type PersonData } from "@/store/people-data";
 
 export type Person = { userId: string; name: string; color: string; isMe: boolean };
@@ -39,6 +40,18 @@ export function SharedView({ people }: { people: Person[] }) {
           {people.map((p) => (
             <TodayMetrics key={p.userId} person={p} data={data[p.userId]} today={today} />
           ))}
+        </div>
+      </Section>
+
+      <Section title="今明行程">
+        <div className="space-y-3">
+          <DayPlans label="今天" date={today} people={people} data={data} />
+          <DayPlans
+            label="明天"
+            date={toDateKey(addDays(parseISO(today), 1))}
+            people={people}
+            data={data}
+          />
         </div>
       </Section>
 
@@ -91,6 +104,45 @@ function PersonLabel({ person }: { person: Person }) {
       <span className="size-2.5 rounded-full" style={{ backgroundColor: person.color }} />
       {person.isMe ? `${person.name}（我）` : person.name}
     </span>
+  );
+}
+
+function DayPlans({
+  label,
+  date,
+  people,
+  data,
+}: {
+  label: string;
+  date: string;
+  people: Person[];
+  data: Record<string, PersonData>;
+}) {
+  const plans = people.map((p) => sortSchedule(data[p.userId]?.life?.schedule?.[date] ?? []));
+  const range = timelineRange(plans);
+
+  return (
+    <div className="rounded-2xl border border-border/70 bg-white p-4 sm:p-5">
+      <h4 className="mb-3 text-sm font-medium text-ink">
+        {label}
+        <span className="ml-1.5 text-xs font-normal text-muted-foreground">
+          {formatShortDate(date)}
+        </span>
+      </h4>
+      <div className="space-y-4">
+        {people.map((p, i) => (
+          <div key={p.userId}>
+            <div className="mb-1 flex items-center justify-between gap-2">
+              <PersonLabel person={p} />
+              {plans[i].length === 0 && (
+                <span className="text-xs text-muted-foreground">還沒填</span>
+              )}
+            </div>
+            <DayTimeline items={plans[i]} color={p.color} range={range} />
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 

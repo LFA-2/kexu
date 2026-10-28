@@ -1,7 +1,16 @@
 "use client";
 
 import { createContext, useCallback, useContext, type ReactNode } from "react";
-import { EMPTY_LIFE, isLifeState, type LifeState, type MetricKey, type Todo } from "@/lib/life";
+import { subDays } from "date-fns";
+import { toDateKey } from "@/lib/dates";
+import {
+  EMPTY_LIFE,
+  isLifeState,
+  type LifeState,
+  type MetricKey,
+  type ScheduleItem,
+  type Todo,
+} from "@/lib/life";
 import { uid } from "@/lib/utils";
 import { useCloudDoc, type SyncStatus } from "@/store/cloud-doc";
 
@@ -15,7 +24,11 @@ type LifeStore = LifeState & {
   removeTodo: (id: string) => void;
   setNote: (date: string, text: string) => void;
   toggleAvailable: (date: string) => void;
+  addScheduleItem: (date: string, item: Omit<ScheduleItem, "id">) => void;
+  removeScheduleItem: (date: string, id: string) => void;
 };
+
+const SCHEDULE_KEEP_DAYS = 14;
 
 const LifeContext = createContext<LifeStore | null>(null);
 
@@ -104,6 +117,34 @@ export function LifeProvider({
     [mutate],
   );
 
+  const addScheduleItem = useCallback(
+    (date: string, item: Omit<ScheduleItem, "id">) =>
+      mutate((prev) => {
+        const cutoff = toDateKey(subDays(new Date(), SCHEDULE_KEEP_DAYS));
+        const schedule = Object.fromEntries(
+          Object.entries(prev.schedule ?? {}).filter(([d]) => d >= cutoff),
+        );
+        schedule[date] = [
+          ...(schedule[date] ?? []),
+          { ...item, label: item.label.trim().slice(0, 40), id: uid("plan") },
+        ];
+        return { ...prev, schedule };
+      }),
+    [mutate],
+  );
+
+  const removeScheduleItem = useCallback(
+    (date: string, id: string) =>
+      mutate((prev) => {
+        const schedule = { ...prev.schedule };
+        const rest = (schedule[date] ?? []).filter((i) => i.id !== id);
+        if (rest.length) schedule[date] = rest;
+        else delete schedule[date];
+        return { ...prev, schedule };
+      }),
+    [mutate],
+  );
+
   const value: LifeStore = {
     ...state,
     readOnly: !editable,
@@ -115,6 +156,8 @@ export function LifeProvider({
     removeTodo,
     setNote,
     toggleAvailable,
+    addScheduleItem,
+    removeScheduleItem,
   };
 
   return <LifeContext.Provider value={value}>{children}</LifeContext.Provider>;
