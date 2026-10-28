@@ -1,15 +1,6 @@
 "use client";
 
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
-import { supabase } from "@/lib/supabase";
+import { createContext, useCallback, useContext, type ReactNode } from "react";
 import {
   EMPTY_STATE,
   isSchoolState,
@@ -19,14 +10,11 @@ import {
   type SchoolState,
 } from "@/lib/types";
 import { uid } from "@/lib/utils";
+import { useCloudDoc, type SyncStatus } from "@/store/cloud-doc";
 
-const POLL_MS = 30000;
+export type { SyncStatus };
+
 const LEGACY_KEY = "kexu-school-v1";
-
-export type SyncStatus = "loading" | "synced" | "saving" | "offline";
-
-type Stored = { version: number; state: SchoolState };
-type Updater = (prev: SchoolState) => SchoolState;
 
 type SchoolStore = SchoolState & {
   readOnly: boolean;
@@ -49,36 +37,6 @@ type SchoolStore = SchoolState & {
 
 const SchoolContext = createContext<SchoolStore | null>(null);
 
-const cacheKey = (ownerId: string) => `kexu-cache-${ownerId}`;
-
-function readCache(ownerId: string): Stored | null {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(cacheKey(ownerId)) ?? "null");
-    if (parsed && typeof parsed.version === "number" && isSchoolState(parsed.state)) return parsed;
-  } catch {
-    // ignore unreadable cache
-  }
-  return null;
-}
-
-function writeCache(ownerId: string, stored: Stored) {
-  try {
-    localStorage.setItem(cacheKey(ownerId), JSON.stringify(stored));
-  } catch {
-    // storage full or unavailable: the cloud copy is authoritative anyway
-  }
-}
-
-function readLegacyLocalData(): SchoolState | null {
-  try {
-    const parsed: unknown = JSON.parse(localStorage.getItem(LEGACY_KEY) ?? "null");
-    if (isSchoolState(parsed) && parsed.courses.length > 0) return parsed;
-  } catch {
-    // ignore
-  }
-  return null;
-}
-
 function isEmpty(state: SchoolState) {
   return (
     state.courses.length === 0 &&
@@ -86,6 +44,21 @@ function isEmpty(state: SchoolState) {
     state.exams.length === 0 &&
     state.progress.length === 0
   );
+}
+
+/** One-time upload of data kept on this device before accounts existed. */
+function takeLegacyLocalData(serverState: SchoolState): SchoolState | null {
+  try {
+    const parsed: unknown = JSON.parse(localStorage.getItem(LEGACY_KEY) ?? "null");
+    if (!isSchoolState(parsed) || parsed.courses.length === 0 || !isEmpty(serverState)) {
+      return null;
+    }
+    localStorage.setItem(`${LEGACY_KEY}-uploaded`, localStorage.getItem(LEGACY_KEY) ?? "");
+    localStorage.removeItem(LEGACY_KEY);
+    return parsed;
+  } catch {
+    return null;
+  }
 }
 
 /** Mount with `key={ownerId}` so switching people starts from a clean slate. */
@@ -98,119 +71,16 @@ export function SchoolProvider({
   editable: boolean;
   children: ReactNode;
 }) {
-  const [initial] = useState(() => readCache(ownerId));
-  const [state, setState] = useState<SchoolState>(initial?.state ?? EMPTY_STATE);
-  const [loaded, setLoaded] = useState(initial !== null);
-  const [syncStatus, setSyncStatus] = useState<SyncStatus>("loading");
-
-  const serverRef = useRef<Stored>(initial ?? { version: -1, state: EMPTY_STATE });
-  const pendingRef = useRef(0);
-  const queueRef = useRef<Promise<void>>(Promise.resolve());
-  const migrationCheckedRef = useRef(false);
-
-  const adopt = useCallback(
-    (stored: Stored) => {
-      serverRef.current = stored;
-      writeCache(ownerId, stored);
-      setState(stored.state);
-      setLoaded(true);
-    },
-    [ownerId],
-  );
-
-  const commit = useCallback(
-    (updater: Updater) => {
-      pendingRef.current += 1;
-      setSyncStatus("saving");
-
-      // On conflict, re-apply the updater to the latest server copy so edits
-      // made on another device are merged rather than overwritten.
-      queueRef.current = queueRef.current.then(async () => {
-        try {
-          let base = serverRef.current;
-          for (let attempt = 0; attempt < 5; attempt++) {
-            const { data, error } = await supabase.rpc("save_school_data", {
-              base_version: base.version,
-              new_state: updater(base.state),
-            });
-            if (error) throw error;
-            const result = data as { ok: boolean } & Stored;
-            serverRef.current = { version: result.version, state: result.state };
-            if (result.ok) break;
-            base = serverRef.current;
-          }
-          writeCache(ownerId, serverRef.current);
-          pendingRef.current -= 1;
-          if (pendingRef.current === 0) {
-            setState(serverRef.current.state);
-            setSyncStatus("synced");
-          }
-        } catch {
-          pendingRef.current -= 1;
-          setSyncStatus("offline");
-          if (pendingRef.current === 0) setState(serverRef.current.state);
-        }
-      });
-    },
-    [ownerId],
-  );
-
-  const refresh = useCallback(async () => {
-    if (pendingRef.current > 0) return;
-    const { data, error } = await supabase
-      .from("school_data")
-      .select("version, state")
-      .eq("user_id", ownerId)
-      .maybeSingle();
-    if (pendingRef.current > 0) return;
-    if (error || !data) {
-      setSyncStatus("offline");
-      return;
-    }
-    const stored = data as Stored;
-    if (stored.version !== serverRef.current.version) adopt(stored);
-    else setLoaded(true);
-    setSyncStatus("synced");
-
-    // One-time upload of data kept on this device before accounts existed.
-    if (editable && !migrationCheckedRef.current) {
-      migrationCheckedRef.current = true;
-      const legacy = readLegacyLocalData();
-      if (legacy && isEmpty(stored.state)) {
-        setState(legacy);
-        commit(() => legacy);
-        localStorage.setItem(`${LEGACY_KEY}-uploaded`, localStorage.getItem(LEGACY_KEY) ?? "");
-        localStorage.removeItem(LEGACY_KEY);
-      }
-    }
-  }, [ownerId, editable, adopt, commit]);
-
-  useEffect(() => {
-    const first = setTimeout(refresh, 0);
-    const timer = setInterval(() => {
-      if (document.visibilityState === "visible") refresh();
-    }, POLL_MS);
-    const onVisible = () => {
-      if (document.visibilityState === "visible") refresh();
-    };
-    document.addEventListener("visibilitychange", onVisible);
-    window.addEventListener("online", onVisible);
-    return () => {
-      clearTimeout(first);
-      clearInterval(timer);
-      document.removeEventListener("visibilitychange", onVisible);
-      window.removeEventListener("online", onVisible);
-    };
-  }, [refresh]);
-
-  const mutate = useCallback(
-    (updater: Updater) => {
-      if (!editable) return;
-      setState((prev) => updater(prev));
-      commit(updater);
-    },
-    [editable, commit],
-  );
+  const { state, loaded, syncStatus, mutate } = useCloudDoc<SchoolState>({
+    table: "school_data",
+    rpc: "save_school_data",
+    cacheKey: `kexu-cache-${ownerId}`,
+    ownerId,
+    editable,
+    empty: EMPTY_STATE,
+    isValid: isSchoolState,
+    onFirstSync: takeLegacyLocalData,
+  });
 
   const addCourse = useCallback(
     (name: string, color: string) => {

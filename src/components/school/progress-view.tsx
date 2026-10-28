@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckButton } from "@/components/school/course-detail-view";
+import { CheckButton } from "@/components/check-button";
 import { Button } from "@/components/ui/button";
 import { useSchool } from "@/store/school-store";
 import { Trash2 } from "lucide-react";

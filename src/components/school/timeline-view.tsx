@@ -1,9 +1,9 @@
 "use client";
 
 import { useMemo } from "react";
-import { CheckButton } from "@/components/school/course-detail-view";
+import { CheckButton } from "@/components/check-button";
 import { CourseDot } from "@/components/school/course-dot";
-import { MonthCalendar } from "@/components/school/month-calendar";
+import { MonthCalendar } from "@/components/month-calendar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatShortDate, relativeStatus } from "@/lib/dates";

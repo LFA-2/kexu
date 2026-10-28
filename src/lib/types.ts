@@ -1,4 +1,4 @@
-export type Category = "school" | "life";
+export type Category = "school" | "life" | "shared";
 
 export type Course = {
   id: string;
