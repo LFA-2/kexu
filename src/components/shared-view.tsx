@@ -1,12 +1,15 @@
 "use client";
 
-import { useMemo, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { addDays, parseISO } from "date-fns";
 import { DayTimeline, timelineRange } from "@/components/day-timeline";
+import { AbGameView } from "@/components/games/ab-game-view";
+import { GamesView } from "@/components/games/games-view";
 import { MonthCalendar } from "@/components/month-calendar";
 import { formatShortDate, toDateKey } from "@/lib/dates";
 import { METRICS, sortSchedule } from "@/lib/life";
 import { usePeopleData, type PersonData } from "@/store/people-data";
+import { ChevronRight, Gamepad2 } from "lucide-react";
 
 export type Person = { userId: string; name: string; color: string; isMe: boolean };
 
@@ -21,6 +24,29 @@ type AgendaItem = {
 };
 
 export function SharedView({ people }: { people: Person[] }) {
+  const [screen, setScreen] = useState<"home" | "games" | "ab">("home");
+  const go = (next: typeof screen) => {
+    setScreen(next);
+    window.scrollTo({ top: 0 });
+  };
+  const me = people.find((p) => p.isMe)!;
+
+  if (screen === "games") {
+    return <GamesView onBack={() => go("home")} onOpenAb={() => go("ab")} />;
+  }
+  if (screen === "ab") {
+    return (
+      <AbGameView
+        me={me}
+        opponents={people.filter((p) => !p.isMe)}
+        onBack={() => go("games")}
+      />
+    );
+  }
+  return <SharedHome people={people} onOpenGames={() => go("games")} />;
+}
+
+function SharedHome({ people, onOpenGames }: { people: Person[]; onOpenGames: () => void }) {
   const { data, loaded } = usePeopleData(people.map((p) => p.userId));
   const today = toDateKey(new Date());
 
@@ -34,6 +60,21 @@ export function SharedView({ people }: { people: Person[] }) {
         <p className="text-sm text-muted-foreground">你和連結的人今天的狀況</p>
         <h2 className="font-display mt-1 text-2xl tracking-tight text-ink sm:text-3xl">共同</h2>
       </header>
+
+      <button
+        type="button"
+        onClick={onOpenGames}
+        className="flex w-full items-center gap-3 rounded-2xl border border-border/70 bg-white p-4 text-left transition-colors hover:border-slate-300"
+      >
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-ink">
+          <Gamepad2 className="size-5" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="font-display block text-lg text-ink">小遊戲</span>
+          <span className="block truncate text-xs text-muted-foreground">1A2B</span>
+        </span>
+        <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+      </button>
 
       <Section title="今天的狀態">
         <div className="grid gap-3 sm:grid-cols-2">
