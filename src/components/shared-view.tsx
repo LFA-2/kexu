@@ -4,7 +4,10 @@ import { useMemo, useState, type ReactNode } from "react";
 import { addDays, parseISO } from "date-fns";
 import { DayTimeline, timelineRange } from "@/components/day-timeline";
 import { AbGameView } from "@/components/games/ab-game-view";
-import { GamesView } from "@/components/games/games-view";
+import { BattleshipView } from "@/components/games/battleship-view";
+import { BlottoView } from "@/components/games/blotto-view";
+import { GamesView, type GameId } from "@/components/games/games-view";
+import { PenaltyView } from "@/components/games/penalty-view";
 import { MonthCalendar } from "@/components/month-calendar";
 import { formatShortDate, toDateKey } from "@/lib/dates";
 import { METRICS, sortSchedule } from "@/lib/life";
@@ -24,24 +27,29 @@ type AgendaItem = {
 };
 
 export function SharedView({ people }: { people: Person[] }) {
-  const [screen, setScreen] = useState<"home" | "games" | "ab">("home");
+  const [screen, setScreen] = useState<"home" | "games" | GameId>("home");
   const go = (next: typeof screen) => {
     setScreen(next);
     window.scrollTo({ top: 0 });
   };
   const me = people.find((p) => p.isMe)!;
+  const gameProps = {
+    me,
+    opponents: people.filter((p) => !p.isMe),
+    onBack: () => go("games"),
+  };
 
-  if (screen === "games") {
-    return <GamesView onBack={() => go("home")} onOpenAb={() => go("ab")} />;
-  }
-  if (screen === "ab") {
-    return (
-      <AbGameView
-        me={me}
-        opponents={people.filter((p) => !p.isMe)}
-        onBack={() => go("games")}
-      />
-    );
+  switch (screen) {
+    case "games":
+      return <GamesView onBack={() => go("home")} onOpen={go} />;
+    case "ab":
+      return <AbGameView {...gameProps} />;
+    case "battleship":
+      return <BattleshipView {...gameProps} />;
+    case "blotto":
+      return <BlottoView {...gameProps} />;
+    case "penalty":
+      return <PenaltyView {...gameProps} />;
   }
   return <SharedHome people={people} onOpenGames={() => go("games")} />;
 }
