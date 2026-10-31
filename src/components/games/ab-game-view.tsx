@@ -97,6 +97,14 @@ export function AbGameView({
                 )}
                 onGuess={(value) => game.guess(opponent.userId, value)}
               />
+              {game.mySecret && (
+                <TheirGuessesCard
+                  opponent={opponent}
+                  guesses={game.guesses.filter(
+                    (g) => g.guesser === opponent.userId && g.owner === me.userId,
+                  )}
+                />
+              )}
               <ResultCard
                 opponent={opponent}
                 iHaveSecret={!!game.mySecret}
@@ -219,6 +227,44 @@ function MySecretCard({
   );
 }
 
+function GuessList({ guesses }: { guesses: Guess[] }) {
+  if (guesses.length === 0) return null;
+  return (
+    <ol className="space-y-1.5">
+      {guesses.map((g, i) => (
+        <li key={g.id} className="flex items-center gap-3">
+          <span className="w-6 text-right text-xs tabular-nums text-muted-foreground">{i + 1}</span>
+          <span className="font-display text-lg tracking-[0.3em] tabular-nums text-ink">
+            {g.guess}
+          </span>
+          <span className="ml-auto text-sm font-medium tabular-nums">
+            <span className="text-teal-700">{g.a}A</span>
+            <span className="text-amber-700">{g.b}B</span>
+          </span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+function TheirGuessesCard({ opponent, guesses }: { opponent: Person; guesses: Guess[] }) {
+  const solved = guesses.some((g) => g.a === 4);
+  return (
+    <Card title={`「${opponent.name}」猜我的數字`}>
+      {guesses.length === 0 ? (
+        <p className="text-sm text-muted-foreground">{opponent.name}還沒開始猜。</p>
+      ) : (
+        <div className="space-y-3">
+          <GuessList guesses={guesses} />
+          <p className="text-xs text-muted-foreground">
+            {solved ? `猜中了・共 ${guesses.length} 次` : `已猜 ${guesses.length} 次，還沒猜中`}
+          </p>
+        </div>
+      )}
+    </Card>
+  );
+}
+
 function GuessCard({
   opponent,
   ready,
@@ -257,24 +303,7 @@ function GuessCard({
         <p className="text-sm text-muted-foreground">{opponent.name}今天還沒設定數字。</p>
       ) : (
         <div className="space-y-3">
-          {guesses.length > 0 && (
-            <ol className="space-y-1.5">
-              {guesses.map((g, i) => (
-                <li key={g.id} className="flex items-center gap-3">
-                  <span className="w-6 text-right text-xs tabular-nums text-muted-foreground">
-                    {i + 1}
-                  </span>
-                  <span className="font-display text-lg tracking-[0.3em] tabular-nums text-ink">
-                    {g.guess}
-                  </span>
-                  <span className="ml-auto text-sm font-medium tabular-nums">
-                    <span className="text-teal-700">{g.a}A</span>
-                    <span className="text-amber-700">{g.b}B</span>
-                  </span>
-                </li>
-              ))}
-            </ol>
-          )}
+          <GuessList guesses={guesses} />
 
           {solved ? (
             <p className="rounded-xl bg-teal-50 px-4 py-3 text-sm font-medium text-teal-800">
