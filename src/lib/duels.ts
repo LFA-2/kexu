@@ -13,28 +13,16 @@ export function shipCells(start: number, length: number, orientation: Orientatio
   return Array.from({ length }, (_, i) => (orientation === "h" ? start + i : start + i * BOARD));
 }
 
-export function randomFleet(): number[][] {
-  for (;;) {
-    const used = new Set<number>();
-    const fleet: number[][] = [];
-    for (const length of SHIP_LENGTHS) {
-      let placed = false;
-      for (let attempt = 0; attempt < 100 && !placed; attempt++) {
-        const cells = shipCells(
-          Math.floor(Math.random() * BOARD * BOARD),
-          length,
-          Math.random() < 0.5 ? "h" : "v",
-        );
-        if (cells && cells.every((c) => !used.has(c))) {
-          cells.forEach((c) => used.add(c));
-          fleet.push(cells);
-          placed = true;
-        }
-      }
-      if (!placed) break;
+/** A random position for one ship that avoids `occupied`, or null if none fits. */
+export function randomShip(length: number, occupied: Set<number>) {
+  const options: number[][] = [];
+  for (let start = 0; start < BOARD * BOARD; start++) {
+    for (const orientation of ["h", "v"] as const) {
+      const cells = shipCells(start, length, orientation);
+      if (cells && cells.every((c) => !occupied.has(c))) options.push(cells);
     }
-    if (fleet.length === SHIP_LENGTHS.length) return fleet;
   }
+  return options.length ? options[Math.floor(Math.random() * options.length)] : null;
 }
 
 // ---------------------------------------------------------------------------

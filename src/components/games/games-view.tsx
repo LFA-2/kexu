@@ -7,7 +7,7 @@ export type GameId = "ab" | "battleship" | "blotto" | "penalty";
 
 const GAMES: { id: GameId; name: string; description: string; icon: LucideIcon }[] = [
   { id: "ab", name: "1A2B", description: "每天設一組 4 位數字，猜對方的數字，次數少的人贏", icon: Hash },
-  { id: "battleship", name: "海戰棋", description: "藏好 4 艘船，輪流開砲，先擊沉對方全部的人贏", icon: Ship },
+  { id: "battleship", name: "海戰棋", description: "每天擺一次船，用最少砲數擊沉對方全部船的人贏", icon: Ship },
   { id: "blotto", name: "攻城戰", description: "每天分配 10 個兵去攻城和守城，攻下比較多城的人贏", icon: Castle },
   { id: "penalty", name: "點球大戰", description: "五球決勝，猜對方往哪射、往哪撲", icon: Goal },
 ];

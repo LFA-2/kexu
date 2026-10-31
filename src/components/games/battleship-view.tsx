@@ -10,11 +10,12 @@ import {
 } from "@/components/games/game-ui";
 import type { Person } from "@/components/shared-view";
 import { Button } from "@/components/ui/button";
+import { formatShortDate } from "@/lib/dates";
 import {
   BOARD,
   FLEET_CELLS,
   SHIP_LENGTHS,
-  randomFleet,
+  randomShip,
   shipCells,
   type Orientation,
 } from "@/lib/duels";
@@ -22,19 +23,26 @@ import { describeError } from "@/lib/supabase";
 import { useBattleship, type BsResult, type BsShot } from "@/store/battleship";
 
 const ERRORS: Record<string, string> = {
-  not_linked: "你們目前沒有連結。",
-  active_exists: "已經有一局在進行中。",
-  not_placing: "這局已經開始了。",
-  already_placed: "你已經佈陣了。",
   invalid: "船的位置不正確。",
-  not_playing: "這局沒有在進行。",
-  not_your_turn: "還沒輪到你。",
+  already_set: "今天已經擺過船了。",
+  not_linked: "你們目前沒有連結。",
+  no_own_fleet: "先擺好你的船才能開砲。",
+  no_fleet: "對方今天還沒擺船。",
+  already_finished: "已經全部擊沉了。",
   already_shot: "這格已經打過了。",
-  finished: "這局已經結束了。",
-  not_found: "找不到這局。",
 };
 
 const CELLS = Array.from({ length: BOARD * BOARD }, (_, i) => i);
+
+type Progress = { shots: number; sunk: number; finished: boolean };
+
+function progressOf(shots: BsShot[]): Progress {
+  return {
+    shots: shots.length,
+    sunk: shots.filter((s) => s.result === "sunk").length,
+    finished: shots.filter((s) => s.result !== "miss").length === FLEET_CELLS,
+  };
+}
 
 export function BattleshipView({
   me,
@@ -45,23 +53,9 @@ export function BattleshipView({
   opponents: Person[];
   onBack: () => void;
 }) {
+  const bs = useBattleship();
   const [opponentId, setOpponentId] = useState(opponents[0].userId);
   const opponent = opponents.find((p) => p.userId === opponentId) ?? opponents[0];
-  return (
-    <GameScreen
-      title="海戰棋"
-      subtitle="7×7 海域・輪流開砲"
-      rules="先擺好 4 艘船（4、3、2、2 格），擺好就不能移動。雙方輪流開一砲，打中是紅色，整艘都被打中就擊沉。先擊沉對方所有船的人獲勝。"
-      onBack={onBack}
-    >
-      <OpponentPicker opponents={opponents} value={opponent.userId} onChange={setOpponentId} />
-      <BattleshipGame key={opponent.userId} me={me} opponent={opponent} />
-    </GameScreen>
-  );
-}
-
-function BattleshipGame({ me, opponent }: { me: Person; opponent: Person }) {
-  const bs = useBattleship(me.userId, opponent.userId);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -78,130 +72,117 @@ function BattleshipGame({ me, opponent }: { me: Person; opponent: Person }) {
     }
   }
 
-  if (!bs.loaded) return <LoadingLine />;
-
-  const game = bs.game;
-  const myShots = bs.shots.filter((s) => s.shooter === me.userId);
-  const theirShots = bs.shots.filter((s) => s.shooter === opponent.userId);
-  const lastShotId = bs.shots[bs.shots.length - 1]?.id;
-  const sunkCount = myShots.filter((s) => s.result === "sunk").length;
-  const lostCount = theirShots.filter((s) => s.result === "sunk").length;
-  const errorLine = error && <p className="text-sm text-destructive">{error}</p>;
-  const record = `戰績 ${bs.record.wins} 勝 ${bs.record.losses} 敗`;
-
-  if (!game || game.status === "finished") {
-    return (
-      <>
-        {game && (
-          <GameCard title="上一局">
-            <Verdict
-              text={
-                !game.winner
-                  ? "這局已取消"
-                  : game.winner === me.userId
-                    ? "你贏了！"
-                    : `${opponent.name}贏了`
-              }
-              detail={`你擊沉 ${sunkCount} 艘・${opponent.name}擊沉 ${lostCount} 艘`}
-            />
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <BoardBlock label={`${opponent.name}的海域`}>
-                <TargetBoard shots={myShots} fleet={bs.theirFleet} lastShotId={lastShotId} />
-              </BoardBlock>
-              <BoardBlock label="我的海域">
-                <HomeBoard fleet={bs.myFleet} shots={theirShots} lastShotId={lastShotId} />
-              </BoardBlock>
-            </div>
-          </GameCard>
-        )}
-        <GameCard title="新的一局">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <span className="text-sm text-muted-foreground">{record}</span>
-            <Button disabled={busy} onClick={() => run(bs.newGame)}>
-              開新局
-            </Button>
-          </div>
-          {errorLine}
-        </GameCard>
-      </>
-    );
-  }
-
-  const resign = (
-    <Button
-      variant="ghost"
-      size="sm"
-      className="text-muted-foreground"
-      disabled={busy}
-      onClick={() => {
-        if (confirm(game.status === "placing" ? "取消這一局？" : "確定認輸？")) run(bs.resign);
-      }}
-    >
-      {game.status === "placing" ? "取消這局" : "認輸"}
-    </Button>
-  );
-
-  if (game.status === "placing") {
-    return bs.myFleet ? (
-      <GameCard title={`等${opponent.name}佈陣`} action={resign}>
-        <HomeBoard fleet={bs.myFleet} shots={[]} />
-        {errorLine}
-      </GameCard>
-    ) : (
-      <>
-        <FleetEditor busy={busy} onSubmit={(fleet) => run(() => bs.place(fleet))} />
-        {errorLine}
-        <div className="flex justify-end">{resign}</div>
-      </>
-    );
-  }
-
-  const myTurn = game.turn === me.userId;
+  const myShots = bs.shots.filter((s) => s.shooter === me.userId && s.owner === opponent.userId);
+  const theirShots = bs.shots.filter((s) => s.shooter === opponent.userId && s.owner === me.userId);
+  const mine = progressOf(myShots);
+  const theirs = progressOf(theirShots);
+  const ready = bs.readyIds.has(opponent.userId);
   const shotCells = new Set(myShots.map((s) => s.cell));
+  const errorLine = error && <p className="mt-3 text-sm text-destructive">{error}</p>;
 
   return (
-    <>
-      <div
-        className={`rounded-xl px-4 py-2.5 text-sm font-medium ${
-          myTurn ? "bg-teal-50 text-teal-800" : "bg-slate-100 text-muted-foreground"
-        }`}
-      >
-        {myTurn ? "輪到你開砲，點對方海域的格子" : `等${opponent.name}開砲`}
-      </div>
-      <GameCard
-        title={`${opponent.name}的海域`}
-        action={<span className="text-xs text-muted-foreground">已擊沉 {sunkCount}/4</span>}
-      >
-        <TargetBoard
-          shots={myShots}
-          fleet={null}
-          lastShotId={lastShotId}
-          onFire={
-            myTurn && !busy
-              ? (cell) => {
-                  if (!shotCells.has(cell)) run(() => bs.fire(cell));
+    <GameScreen
+      title="海戰棋"
+      subtitle={`${formatShortDate(bs.day)}・每天擺一次船`}
+      rules="每天擺一次 4 艘船（4、3、2、2 格），擺好今天就不能改。兩人都擺好後，就可以對對方的海域開砲，不用輪流，隨時都能打。兩人都擊沉對方全部的船後，用的砲數少的人獲勝。"
+      onBack={onBack}
+    >
+      {!bs.loaded ? (
+        <LoadingLine />
+      ) : (
+        <>
+          <OpponentPicker opponents={opponents} value={opponent.userId} onChange={setOpponentId} />
+
+          {bs.myFleet ? (
+            <GameCard
+              title="我今天的海域"
+              action={
+                <span className="text-xs text-muted-foreground">
+                  {opponent.name}
+                  {theirs.shots === 0 ? "還沒開砲" : `開了 ${theirs.shots} 砲・擊沉 ${theirs.sunk}/4`}
+                </span>
+              }
+            >
+              <HomeBoard fleet={bs.myFleet} shots={theirShots} />
+            </GameCard>
+          ) : (
+            <FleetEditor
+              busy={busy}
+              onSubmit={(fleet) => run(() => bs.setFleet(fleet))}
+              error={errorLine}
+            />
+          )}
+
+          <GameCard
+            title={`打「${opponent.name}」的海域`}
+            action={
+              bs.myFleet && ready ? (
+                <span className="text-xs text-muted-foreground">
+                  已開 {mine.shots} 砲・擊沉 {mine.sunk}/4
+                </span>
+              ) : undefined
+            }
+          >
+            {!bs.myFleet ? (
+              <p className="text-sm text-muted-foreground">先擺好你今天的船才能開砲。</p>
+            ) : !ready ? (
+              <p className="text-sm text-muted-foreground">{opponent.name}今天還沒擺船。</p>
+            ) : (
+              <>
+                <TargetBoard
+                  shots={myShots}
+                  onFire={
+                    mine.finished || busy
+                      ? undefined
+                      : (cell) => {
+                          if (!shotCells.has(cell)) run(() => bs.fire(opponent.userId, cell));
+                        }
+                  }
+                />
+                {mine.finished && (
+                  <p className="mt-3 rounded-xl bg-teal-50 px-4 py-3 text-sm font-medium text-teal-800">
+                    全部擊沉！共 {mine.shots} 砲
+                  </p>
+                )}
+                {bs.myFleet && errorLine}
+              </>
+            )}
+          </GameCard>
+
+          <GameCard title="結果">
+            {mine.finished && theirs.finished ? (
+              <Verdict
+                text={
+                  mine.shots < theirs.shots
+                    ? "你贏了！"
+                    : mine.shots > theirs.shots
+                      ? `${opponent.name}贏了`
+                      : "平手"
                 }
-              : undefined
-          }
-        />
-        {errorLine}
-      </GameCard>
-      <GameCard
-        title="我的海域"
-        action={<span className="text-xs text-muted-foreground">被擊沉 {lostCount}/4</span>}
-      >
-        <HomeBoard fleet={bs.myFleet} shots={theirShots} lastShotId={lastShotId} />
-      </GameCard>
-      <div className="flex justify-end">{resign}</div>
-    </>
+                detail={`你 ${mine.shots} 砲・${opponent.name} ${theirs.shots} 砲`}
+              />
+            ) : (
+              <div className="space-y-2 text-sm">
+                <StatusRow name="你" progress={mine} />
+                <StatusRow name={opponent.name} progress={theirs} />
+                <p className="pt-1 text-xs text-muted-foreground">兩人都擊沉全部的船後揭曉勝負。</p>
+              </div>
+            )}
+          </GameCard>
+        </>
+      )}
+    </GameScreen>
   );
 }
 
-function BoardBlock({ label, children }: { label: string; children: ReactNode }) {
+function StatusRow({ name, progress }: { name: string; progress: Progress }) {
+  const { shots, sunk, finished } = progress;
   return (
-    <div>
-      <p className="mb-2 text-xs text-muted-foreground">{label}</p>
-      {children}
+    <div className="flex justify-between gap-2">
+      <span className="text-ink">{name}</span>
+      <span className="text-muted-foreground">
+        {finished ? `全部擊沉・${shots} 砲` : shots > 0 ? `進行中・${shots} 砲・擊沉 ${sunk}/4` : "還沒開始"}
+      </span>
     </div>
   );
 }
@@ -236,32 +217,21 @@ function Board({
   );
 }
 
-const ring = (on: boolean) => (on ? " ring-2 ring-amber-400 ring-offset-1" : "");
+const lastRing = (shots: BsShot[], shot?: BsShot) =>
+  shot && shot.id === shots[shots.length - 1]?.id ? " ring-2 ring-amber-400 ring-offset-1" : "";
 
-function TargetBoard({
-  shots,
-  fleet,
-  lastShotId,
-  onFire,
-}: {
-  shots: BsShot[];
-  fleet: number[][] | null;
-  lastShotId?: number;
-  onFire?: (cell: number) => void;
-}) {
+function TargetBoard({ shots, onFire }: { shots: BsShot[]; onFire?: (cell: number) => void }) {
   const byCell = new Map(shots.map((s) => [s.cell, s]));
   const sunk = new Set(shots.flatMap((s) => s.sunk_cells ?? []));
-  const ships = new Set(fleet?.flat() ?? []);
   return (
     <Board
       onCell={onFire}
       look={(cell) => {
         const shot = byCell.get(cell);
-        const last = ring(shot?.id === lastShotId);
-        if (sunk.has(cell)) return { className: "bg-rose-800" + last, label: "擊沉" };
-        if (shot?.result === "hit") return { className: "bg-rose-500" + last, label: "打中" };
-        if (shot) return { className: "bg-slate-100" + last, dot: true, label: "沒中" };
-        if (ships.has(cell)) return { className: "bg-slate-300", label: "船" };
+        const ring = lastRing(shots, shot);
+        if (sunk.has(cell)) return { className: "bg-rose-800" + ring, label: "擊沉" };
+        if (shot?.result === "hit") return { className: "bg-rose-500" + ring, label: "打中" };
+        if (shot) return { className: "bg-slate-100" + ring, dot: true, label: "沒中" };
         return {
           className: onFire ? "bg-slate-100 hover:bg-teal-100" : "bg-slate-100",
           label: "未知",
@@ -271,24 +241,16 @@ function TargetBoard({
   );
 }
 
-function HomeBoard({
-  fleet,
-  shots,
-  lastShotId,
-}: {
-  fleet: number[][] | null;
-  shots: BsShot[];
-  lastShotId?: number;
-}) {
-  const ships = new Set(fleet?.flat() ?? []);
+function HomeBoard({ fleet, shots }: { fleet: number[][]; shots: BsShot[] }) {
+  const ships = new Set(fleet.flat());
   const byCell = new Map(shots.map((s) => [s.cell, s]));
   return (
     <Board
       look={(cell) => {
         const shot = byCell.get(cell);
-        const last = ring(shot?.id === lastShotId);
-        if (shot && ships.has(cell)) return { className: "bg-rose-500" + last, label: "被打中" };
-        if (shot) return { className: "bg-slate-100" + last, dot: true, label: "沒中" };
+        const ring = lastRing(shots, shot);
+        if (shot && ships.has(cell)) return { className: "bg-rose-500" + ring, label: "被打中" };
+        if (shot) return { className: "bg-slate-100" + ring, dot: true, label: "沒中" };
         if (ships.has(cell)) return { className: "bg-slate-500", label: "我的船" };
         return { className: "bg-slate-100", label: "海" };
       }}
@@ -299,9 +261,11 @@ function HomeBoard({
 function FleetEditor({
   busy,
   onSubmit,
+  error,
 }: {
   busy: boolean;
   onSubmit: (fleet: number[][]) => void;
+  error: ReactNode;
 }) {
   const [ships, setShips] = useState<(number[] | null)[]>(SHIP_LENGTHS.map(() => null));
   const [selected, setSelected] = useState(0);
@@ -311,50 +275,101 @@ function FleetEditor({
   const owner = new Map<number, number>();
   ships.forEach((cells, i) => cells?.forEach((c) => owner.set(c, i)));
   const placedCount = ships.filter(Boolean).length;
+  const othersOf = (i: number) =>
+    new Set(ships.flatMap((cells, j) => (j === i || !cells ? [] : cells)));
+
+  function place(i: number, cells: number[]) {
+    const next = ships.map((s, j) => (j === i ? cells : s));
+    setShips(next);
+    if (ships[i] === null) {
+      const nextEmpty = next.findIndex((s) => !s);
+      if (nextEmpty >= 0) setSelected(nextEmpty);
+    }
+  }
 
   function tap(cell: number) {
     setHint(null);
     const existing = owner.get(cell);
-    if (existing !== undefined) {
-      setShips((prev) => prev.map((s, i) => (i === existing ? null : s)));
+    if (existing !== undefined && existing !== selected) {
       setSelected(existing);
       return;
     }
-    if (selected < 0 || ships[selected]) return;
     const cells = shipCells(cell, SHIP_LENGTHS[selected], orientation);
-    if (!cells || cells.some((c) => owner.has(c))) {
+    const others = othersOf(selected);
+    if (!cells || cells.some((c) => others.has(c))) {
       setHint("這裡放不下，換個位置或方向。");
       return;
     }
-    const next = ships.map((s, i) => (i === selected ? cells : s));
-    setShips(next);
-    setSelected(next.findIndex((s) => !s));
+    place(selected, cells);
+  }
+
+  function randomize(i: number) {
+    setHint(null);
+    setSelected(i);
+    const cells = randomShip(SHIP_LENGTHS[i], othersOf(i));
+    if (cells) place(i, cells);
+    else setHint("剩下的空間放不下這艘船。");
+  }
+
+  function clear(i: number) {
+    setHint(null);
+    setShips((prev) => prev.map((s, j) => (j === i ? null : s)));
+    setSelected(i);
   }
 
   return (
-    <GameCard title="佈陣">
+    <GameCard title="擺放今天的船">
       <p className="text-xs leading-relaxed text-muted-foreground">
-        選一艘船，點格子放下（從那格往右或往下延伸）。點已經放好的船可以拿起來重放。
+        選一艘船，點格子放下（從那格往右或往下延伸），再點別的位置可以移動它。
       </p>
 
-      <div className="mt-3 flex flex-wrap items-center gap-2">
+      <ul className="mt-3 space-y-1.5">
         {SHIP_LENGTHS.map((length, i) => (
-          <button
+          <li
             key={i}
-            type="button"
-            onClick={() => !ships[i] && setSelected(i)}
-            className={`rounded-full border px-3 py-1 text-sm transition-colors ${
-              ships[i]
-                ? "border-transparent bg-slate-100 text-muted-foreground line-through"
-                : selected === i
-                  ? "border-ink bg-ink text-white"
-                  : "border-border/80 text-muted-foreground hover:text-ink"
+            className={`flex items-center gap-2 rounded-xl border px-2 py-1.5 transition-colors ${
+              selected === i ? "border-ink" : "border-border/70"
             }`}
           >
-            {length} 格
-          </button>
+            <button
+              type="button"
+              onClick={() => {
+                setSelected(i);
+                setHint(null);
+              }}
+              aria-pressed={selected === i}
+              className="flex flex-1 items-center gap-3 text-left"
+            >
+              <span className="flex gap-0.5">
+                {Array.from({ length }, (_, k) => (
+                  <span
+                    key={k}
+                    className={`size-3 rounded-sm ${ships[i] ? "bg-slate-500" : "bg-slate-200"}`}
+                  />
+                ))}
+              </span>
+              <span className="text-sm text-ink">{length} 格</span>
+              <span className="text-xs text-muted-foreground">{ships[i] ? "已擺放" : "未擺放"}</span>
+            </button>
+            <Button variant="ghost" size="sm" onClick={() => randomize(i)} aria-label={`${length} 格船隨機擺放`}>
+              隨機
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={!ships[i]}
+              onClick={() => clear(i)}
+              aria-label={`${length} 格船清除`}
+            >
+              清除
+            </Button>
+          </li>
         ))}
-        <div className="ml-auto flex rounded-lg border border-border/80 p-0.5">
+      </ul>
+
+      <div className="mt-3 flex items-center justify-between gap-3">
+        <span className="text-xs text-muted-foreground">放置方向</span>
+        <div className="flex rounded-lg border border-border/80 p-0.5">
           {(["h", "v"] as const).map((o) => (
             <button
               key={o}
@@ -373,52 +388,30 @@ function FleetEditor({
       <div className="mt-3">
         <Board
           onCell={tap}
-          look={(cell) =>
-            owner.has(cell)
-              ? { className: "bg-slate-500", label: "船" }
-              : { className: "bg-slate-100 hover:bg-teal-100", label: "海" }
-          }
+          look={(cell) => {
+            const i = owner.get(cell);
+            if (i === undefined) return { className: "bg-slate-100 hover:bg-teal-100", label: "海" };
+            return { className: i === selected ? "bg-ink" : "bg-slate-500", label: `${SHIP_LENGTHS[i]} 格船` };
+          }}
         />
       </div>
       {hint && <p className="mt-2 text-sm text-destructive">{hint}</p>}
 
-      <div className="mt-4 flex flex-wrap gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            setShips(randomFleet());
-            setSelected(-1);
-            setHint(null);
-          }}
-        >
-          隨機擺放
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            setShips(SHIP_LENGTHS.map(() => null));
-            setSelected(0);
-            setHint(null);
-          }}
-        >
-          清除
-        </Button>
+      <div className="mt-4 flex items-center justify-between gap-3">
+        <span className="text-xs text-muted-foreground">
+          已擺 {placedCount}/{SHIP_LENGTHS.length} 艘
+        </span>
         <Button
           size="sm"
-          className="ml-auto"
           disabled={busy || placedCount !== SHIP_LENGTHS.length}
           onClick={() => {
-            if (confirm("確認佈陣？之後就不能移動了。")) onSubmit(ships as number[][]);
+            if (confirm("確認今天的佈陣？擺好後今天就不能改了。")) onSubmit(ships as number[][]);
           }}
         >
           確認佈陣
         </Button>
       </div>
-      <p className="mt-2 text-xs text-muted-foreground">
-        已放 {placedCount}/{SHIP_LENGTHS.length} 艘・共 {FLEET_CELLS} 格
-      </p>
+      {error}
     </GameCard>
   );
 }
