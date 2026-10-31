@@ -35,7 +35,23 @@ const BASE = ${JSON.stringify(BASE)};
 const ASSETS = ${JSON.stringify(urls)};
 
 self.addEventListener("install", (event) => {
-  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(ASSETS)));
+  // GitHub Pages sends max-age=600; bypass the HTTP cache so a fresh deploy
+  // never gets precached together with stale HTML that points at removed chunks.
+  // A half-propagated deploy can still serve an HTML page that references chunks
+  // from another build; failing the install keeps the previous version instead.
+  event.waitUntil(
+    caches.open(CACHE).then(async (cache) => {
+      await cache.addAll(ASSETS.map((url) => new Request(url, { cache: "reload" })));
+      const html = await (await cache.match(BASE + "/")).text();
+      const chunks = html.match(/\\/_next\\/static\\/[^"'\\s]+?\\.(?:js|css)/g) ?? [];
+      for (const chunk of chunks) {
+        if (!ASSETS.includes(BASE + chunk)) {
+          await caches.delete(CACHE);
+          throw new Error("stale page in precache: " + chunk);
+        }
+      }
+    }),
+  );
 });
 
 self.addEventListener("activate", (event) => {
