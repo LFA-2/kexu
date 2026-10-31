@@ -117,3 +117,419 @@
 @utility animate-fade-up {
   animation: fade-up 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
+
+/* Penalty shootout. One stage is one shooter against one keeper. */
+.pk-stage {
+  position: relative;
+  height: 13.5rem;
+  overflow: hidden;
+  border-radius: 0.9rem;
+  background: linear-gradient(#d7ebc8, #8fbf78 58%, #6aa85a);
+  box-shadow: inset 0 0 0 1px rgba(20, 33, 43, 0.08);
+}
+
+.pk-stage::before {
+  content: "";
+  position: absolute;
+  left: 16%;
+  right: 16%;
+  top: 0;
+  bottom: 22%;
+  border: 2px solid rgba(255, 255, 255, 0.55);
+  border-top: none;
+}
+
+.pk-goal {
+  position: absolute;
+  top: 8px;
+  left: 12%;
+  right: 12%;
+  height: 5.1rem;
+  border: 3px solid #14212b;
+  border-bottom: none;
+  background-color: rgba(255, 255, 255, 0.28);
+  background-image:
+    linear-gradient(rgba(20, 33, 43, 0.2) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(20, 33, 43, 0.2) 1px, transparent 1px);
+  background-size: 11px 11px;
+}
+
+.pk-flash {
+  position: absolute;
+  top: 8px;
+  left: 12%;
+  right: 12%;
+  height: 5.1rem;
+  background: rgba(15, 118, 110, 0.45);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.pk-keeper,
+.pk-kicker {
+  position: absolute;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 4.5rem;
+  margin-left: -2.25rem;
+  left: 50%;
+}
+
+.pk-keeper {
+  top: 0.85rem;
+}
+
+.pk-keeper .pk-body {
+  transform-origin: 50% 80%;
+}
+
+.pk-kicker {
+  bottom: 0.15rem;
+}
+
+.pk-body {
+  position: relative;
+  width: 1.8rem;
+  height: 2.55rem;
+}
+
+.pk-head,
+.pk-torso,
+.pk-leg,
+.pk-boot {
+  position: absolute;
+  background: currentColor;
+}
+
+.pk-head {
+  top: 0;
+  left: 50%;
+  width: 0.62rem;
+  height: 0.62rem;
+  margin-left: -0.31rem;
+  border-radius: 999px;
+}
+
+.pk-torso {
+  top: 0.68rem;
+  left: 50%;
+  width: 0.46rem;
+  height: 0.78rem;
+  margin-left: -0.23rem;
+  border-radius: 0.2rem;
+}
+
+.pk-leg {
+  top: 1.4rem;
+  width: 0.28rem;
+  height: 0.95rem;
+  border-radius: 0.14rem;
+}
+
+.pk-leg-l {
+  left: 0.28rem;
+}
+
+.pk-leg-r {
+  right: 0.28rem;
+}
+
+.pk-boot {
+  top: 1.38rem;
+  left: 0.95rem;
+  width: 0.3rem;
+  height: 0.95rem;
+  border-radius: 0.14rem;
+  transform-origin: 50% 0;
+}
+
+.pk-boot::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 0.72rem;
+  height: 0.26rem;
+  border-radius: 0.12rem;
+  background: currentColor;
+}
+
+.pk-glove {
+  position: absolute;
+  top: 0.82rem;
+  width: 0.58rem;
+  height: 0.4rem;
+  border-radius: 0.2rem;
+  background: #f8fafc;
+  box-shadow: inset 0 0 0 1.5px currentColor;
+}
+
+.pk-glove-l {
+  left: -0.35rem;
+  transform-origin: 100% 50%;
+}
+
+.pk-glove-r {
+  right: -0.35rem;
+  transform-origin: 0% 50%;
+}
+
+.pk-tag {
+  max-width: 4.4rem;
+  overflow: hidden;
+  font-size: 10px;
+  font-weight: 650;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pk-ball {
+  position: absolute;
+  z-index: 3;
+  left: 50%;
+  bottom: 0.7rem;
+  width: 0.85rem;
+  height: 0.85rem;
+  margin-left: -0.425rem;
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 32% 32%, #fff 0 20%, transparent 21%),
+    repeating-conic-gradient(#111 0 18deg, #f4f4f5 0 36deg);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+.pk-call {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.4rem;
+  margin-top: 0.35rem;
+  font-size: 11px;
+  line-height: 1.3;
+  opacity: 0;
+}
+
+.pk-call span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pk-on .pk-boot {
+  animation: pk-swing 0.42s cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+}
+
+.pk-on .pk-keeper {
+  animation: pk-dive-move 0.58s 0.26s cubic-bezier(0.18, 0.8, 0.2, 1) forwards;
+}
+
+.pk-on .pk-keeper .pk-body {
+  animation: pk-dive-tilt 0.58s 0.26s cubic-bezier(0.18, 0.8, 0.2, 1) forwards;
+}
+
+.pk-on .pk-glove-l {
+  animation: pk-glove-l 0.4s 0.34s ease-out forwards;
+}
+
+.pk-on .pk-glove-r {
+  animation: pk-glove-r 0.4s 0.34s ease-out forwards;
+}
+
+.pk-on .pk-ball.is-goal {
+  animation: pk-ball-goal 0.74s 0.16s cubic-bezier(0.22, 0.12, 0.2, 1) forwards;
+}
+
+.pk-on .pk-ball.is-save {
+  animation: pk-ball-save 0.7s 0.16s cubic-bezier(0.25, 0.08, 0.25, 1) forwards;
+}
+
+.pk-on.is-goal .pk-flash {
+  animation: pk-flash 0.5s 0.82s both;
+}
+
+.pk-on .pk-call {
+  animation: pk-call 0.35s 1s both;
+}
+
+.pk-settled .pk-keeper,
+.pk-settled .pk-keeper .pk-body,
+.pk-settled .pk-ball,
+.pk-settled .pk-boot,
+.pk-settled .pk-glove-l,
+.pk-settled .pk-glove-r,
+.pk-settled .pk-call {
+  animation: none;
+}
+
+.pk-settled .pk-keeper {
+  left: var(--dive-x);
+}
+
+.pk-settled .pk-keeper .pk-body {
+  transform: translateY(var(--dive-y)) rotate(var(--dive-rot));
+}
+
+.pk-settled .pk-boot {
+  transform: rotate(16deg);
+}
+
+.pk-settled .pk-glove-l {
+  transform: translate(-3px, -3px) rotate(-28deg);
+}
+
+.pk-settled .pk-glove-r {
+  transform: translate(3px, -3px) rotate(28deg);
+}
+
+.pk-settled .pk-ball.is-goal {
+  left: var(--shot-x);
+  bottom: 10.55rem;
+  transform: scale(0.7) rotate(160deg);
+}
+
+.pk-settled .pk-ball.is-save {
+  left: var(--dive-x);
+  bottom: 10.05rem;
+  transform: scale(0.82);
+}
+
+.pk-settled .pk-call {
+  opacity: 1;
+}
+
+@keyframes pk-swing {
+  0% {
+    transform: rotate(-28deg);
+  }
+  55% {
+    transform: rotate(52deg);
+  }
+  100% {
+    transform: rotate(16deg);
+  }
+}
+
+@keyframes pk-dive-move {
+  to {
+    left: var(--dive-x);
+  }
+}
+
+@keyframes pk-dive-tilt {
+  35% {
+    transform: translateY(calc(var(--dive-y) * -0.35));
+  }
+  100% {
+    transform: translateY(var(--dive-y)) rotate(var(--dive-rot));
+  }
+}
+
+@keyframes pk-glove-l {
+  to {
+    transform: translate(-3px, -3px) rotate(-28deg);
+  }
+}
+
+@keyframes pk-glove-r {
+  to {
+    transform: translate(3px, -3px) rotate(28deg);
+  }
+}
+
+@keyframes pk-ball-goal {
+  0% {
+    left: 50%;
+    bottom: 0.7rem;
+    transform: scale(1) rotate(0deg);
+  }
+  100% {
+    left: var(--shot-x);
+    bottom: 10.55rem;
+    transform: scale(0.7) rotate(160deg);
+  }
+}
+
+@keyframes pk-ball-save {
+  0% {
+    left: 50%;
+    bottom: 0.7rem;
+    transform: scale(1);
+  }
+  70% {
+    left: var(--shot-x);
+    bottom: 10.7rem;
+    transform: scale(0.86);
+  }
+  100% {
+    left: var(--dive-x);
+    bottom: 10.05rem;
+    transform: scale(0.82);
+  }
+}
+
+@keyframes pk-flash {
+  0% {
+    opacity: 0;
+  }
+  35% {
+    opacity: 0.9;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes pk-call {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pk-on .pk-keeper,
+  .pk-on .pk-keeper .pk-body,
+  .pk-on .pk-ball,
+  .pk-on .pk-boot,
+  .pk-on .pk-glove-l,
+  .pk-on .pk-glove-r,
+  .pk-on .pk-flash,
+  .pk-on .pk-call {
+    animation: none;
+  }
+
+  .pk-on .pk-keeper {
+    left: var(--dive-x);
+  }
+
+  .pk-on .pk-keeper .pk-body {
+    transform: translateY(var(--dive-y)) rotate(var(--dive-rot));
+  }
+
+  .pk-on .pk-boot {
+    transform: rotate(16deg);
+  }
+
+  .pk-on .pk-ball.is-goal {
+    left: var(--shot-x);
+    bottom: 10.55rem;
+    transform: scale(0.7);
+  }
+
+  .pk-on .pk-ball.is-save {
+    left: var(--dive-x);
+    bottom: 10.05rem;
+    transform: scale(0.82);
+  }
+
+  .pk-on .pk-call {
+    opacity: 1;
+  }
+}

@@ -46,11 +46,12 @@ export function blottoResult(mine: BlottoMove, theirs: BlottoMove) {
 export type Direction = "L" | "C" | "R";
 export const DIRECTIONS: Direction[] = ["L", "C", "R"];
 export const DIRECTION_LABEL: Record<Direction, string> = { L: "左", C: "中", R: "右" };
-export const KICKS = 5;
+export const KICKS = 3;
 export type PenaltyMove = { shots: Direction[]; dives: Direction[] };
 
 export function penaltyResult(mine: PenaltyMove, theirs: PenaltyMove) {
-  const kicks = Array.from({ length: KICKS }, (_, i) => ({
+  const n = Math.min(mine.shots.length, mine.dives.length, theirs.shots.length, theirs.dives.length);
+  const kicks = Array.from({ length: n }, (_, i) => ({
     myShot: mine.shots[i],
     theirDive: theirs.dives[i],
     myGoal: mine.shots[i] !== theirs.dives[i],
