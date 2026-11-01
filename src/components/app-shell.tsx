@@ -249,7 +249,7 @@ function MainApp({ me }: { me: string }) {
               <SchoolProvider key={`s-${ownerId}`} ownerId={ownerId} editable={isMine}>
                 <LifeProvider key={`l-${ownerId}`} ownerId={ownerId} editable={isMine}>
                   <FitnessProvider key={`f-${ownerId}`} ownerId={ownerId} editable={isMine}>
-                    <TodayMain me={me} isMine={isMine} />
+                    <TodayMain me={me} isMine={isMine} color={ownerColor} />
                   </FitnessProvider>
                 </LifeProvider>
               </SchoolProvider>
@@ -342,12 +342,12 @@ function SchoolMain({
   );
 }
 
-function TodayMain({ me, isMine }: { me: string; isMine: boolean }) {
+function TodayMain({ me, isMine, color }: { me: string; isMine: boolean; color: string }) {
   const { syncStatus } = useLife();
   return (
     <>
       <main className="animate-fade-up mt-8 flex-1" style={{ animationDelay: "100ms" }}>
-        <TodayView me={me} isMine={isMine} />
+        <TodayView me={me} isMine={isMine} color={color} />
       </main>
       <SyncFooter status={syncStatus} />
     </>

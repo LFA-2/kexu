@@ -5,11 +5,12 @@ import { ArrowLeft, Castle, ChevronRight, Goal, Hash, Ship, type LucideIcon } fr
 
 export type GameId = "ab" | "battleship" | "blotto" | "penalty";
 
-const GAMES: { id: GameId; name: string; description: string; icon: LucideIcon }[] = [
+const GAMES: { id: GameId; name: string; description: string; icon: LucideIcon; hidden?: boolean }[] = [
   { id: "ab", name: "1A2B", description: "每天設一組 4 位數字，猜對方的數字，次數少的人贏", icon: Hash },
-  { id: "battleship", name: "海戰棋", description: "每天擺一次船，用最少砲數擊沉對方全部船的人贏", icon: Ship },
-  { id: "blotto", name: "攻城戰", description: "每天分配 10 個兵去攻城和守城，攻下比較多城的人贏", icon: Castle },
-  { id: "penalty", name: "點球大戰", description: "三球決勝，猜對方往哪射、往哪撲", icon: Goal },
+  // Kept, just not listed for now.
+  { id: "battleship", name: "海戰棋", description: "每天擺一次船，用最少砲數擊沉對方全部船的人贏", icon: Ship, hidden: true },
+  { id: "blotto", name: "攻城戰", description: "每天分配 10 個兵去攻城和守城，攻下比較多城的人贏", icon: Castle, hidden: true },
+  { id: "penalty", name: "點球大戰", description: "三球決勝，猜對方往哪射、往哪撲", icon: Goal, hidden: true },
 ];
 
 export function GamesView({ onBack, onOpen }: { onBack: () => void; onOpen: (id: GameId) => void }) {
@@ -26,7 +27,7 @@ export function GamesView({ onBack, onOpen }: { onBack: () => void; onOpen: (id:
       </header>
 
       <div className="grid gap-3 sm:grid-cols-2">
-        {GAMES.map(({ id, name, description, icon: Icon }) => (
+        {GAMES.filter((g) => !g.hidden).map(({ id, name, description, icon: Icon }) => (
           <button
             key={id}
             type="button"

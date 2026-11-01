@@ -111,7 +111,7 @@ function SharedHome({
         </span>
         <span className="min-w-0 flex-1">
           <span className="font-display block text-lg text-ink">小遊戲</span>
-          <span className="block truncate text-xs text-muted-foreground">1A2B、海戰棋、攻城戰、點球大戰</span>
+          <span className="block truncate text-xs text-muted-foreground">1A2B</span>
         </span>
         <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
       </button>

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { addDays, format, parseISO, startOfWeek } from "date-fns";
+import { DayTimeline, timelineRange } from "@/components/day-timeline";
 import { WeekView } from "@/components/today/week-view";
 import { zhTW } from "date-fns/locale";
 import { BarChart, ProgressRing, SegmentBar, SERIES } from "@/components/charts";
@@ -45,6 +46,8 @@ import { formatMinutes } from "@/lib/types";
 import { uid } from "@/lib/utils";
 import { useFitness } from "@/store/fitness-store";
 import { useLife } from "@/store/life-store";
+import { useLinks } from "@/store/links-store";
+import { usePeopleData } from "@/store/people-data";
 import { useSchool } from "@/store/school-store";
 import {
   BookOpen,
@@ -58,6 +61,7 @@ import {
   NotebookPen,
   Pencil,
   Plus,
+  CalendarHeart,
   RefreshCw,
   Settings2,
   Sparkles,
@@ -84,7 +88,7 @@ const CATEGORY_COLOR = {
   other: SERIES[4],
 } as const;
 
-export function TodayView({ me, isMine }: { me: string; isMine: boolean }) {
+export function TodayView({ me, isMine, color }: { me: string; isMine: boolean; color: string }) {
   const school = useSchool();
   const life = useLife();
   const fitness = useFitness();
@@ -92,6 +96,20 @@ export function TodayView({ me, isMine }: { me: string; isMine: boolean }) {
   const loaded = school.loaded && life.loaded && fitness.loaded;
 
   const todayKey = toDateKey(new Date());
+  const { linked } = useLinks();
+  const { data: peopleLife } = usePeopleData(
+    isMine ? linked.map((p) => p.userId) : [me, ...linked.map((p) => p.userId)],
+  );
+  const myAvailable = isMine ? life.available : (peopleLife[me]?.life?.available ?? []);
+  const freeWith = linked.filter((p) => peopleLife[p.userId]?.life?.available?.includes(todayKey));
+  const dateBadge =
+    myAvailable.includes(todayKey) && freeWith.length > 0 ? (
+      <p className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-sm font-medium text-amber-900 ring-1 ring-amber-300/80">
+        <CalendarHeart className="size-4" />
+        今日可約會
+        <span className="font-normal text-amber-800/80">和{freeWith.map((p) => p.name).join("、")}</span>
+      </p>
+    ) : null;
   const [date, setDate] = useState(todayKey);
   const [meetings, setMeetings] = useState<Meeting[] | null>(isMine ? null : []);
   const [editing, setEditing] = useState<PlanItem | null>(null);
@@ -338,6 +356,7 @@ export function TodayView({ me, isMine }: { me: string; isMine: boolean }) {
 
   if (!loaded) return <p className="py-16 text-center text-sm text-muted-foreground">載入中…</p>;
 
+  const daySchedule = sortSchedule(life.schedule?.[date] ?? []);
   const dateLabel = format(parseISO(date), "M 月 d 日 EEEE", { locale: zhTW });
   const isPast = date < todayKey;
 
@@ -367,6 +386,7 @@ export function TodayView({ me, isMine }: { me: string; isMine: boolean }) {
         planFor={planFor}
         sources={sources}
         toggle={modeToggle}
+        notice={dateBadge}
         onShiftWeek={(n) => setDate(toDateKey(addDays(parseISO(date), n * 7)))}
         onThisWeek={() => setDate(todayKey)}
         onOpenDay={(d) => {
@@ -392,6 +412,7 @@ export function TodayView({ me, isMine }: { me: string; isMine: boolean }) {
           <h2 className="font-display mt-1 text-2xl tracking-tight text-ink sm:text-3xl">
             {date === todayKey ? "今日" : date === toDateKey(addDays(new Date(), 1)) ? "明天" : dateLabel}
           </h2>
+          {dateBadge}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {modeToggle}
@@ -423,6 +444,16 @@ export function TodayView({ me, isMine }: { me: string; isMine: boolean }) {
           )}
         </div>
       </header>
+
+      <section className="rounded-2xl border border-border/70 bg-white p-4 sm:p-5">
+        <h3 className="font-display text-lg text-ink">行程</h3>
+        {daySchedule.length === 0 && (
+          <p className="mt-1 text-sm text-muted-foreground">這天沒有行程</p>
+        )}
+        <div className="mt-3">
+          <DayTimeline items={daySchedule} color={color} range={timelineRange([daySchedule])} />
+        </div>
+      </section>
 
       <section className="grid gap-4 rounded-2xl border border-border/70 bg-white p-4 sm:grid-cols-[auto_1fr] sm:p-5">
         <div className="flex items-center gap-4 sm:flex-col sm:items-center">

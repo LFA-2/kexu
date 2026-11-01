@@ -44,6 +44,7 @@ export function WeekView({
   planFor,
   sources,
   toggle,
+  notice,
   onShiftWeek,
   onThisWeek,
   onOpenDay,
@@ -54,6 +55,7 @@ export function WeekView({
   planFor: (d: string) => DayPlan | undefined;
   sources: (d: string) => LiveSources;
   toggle: ReactNode;
+  notice?: ReactNode;
   onShiftWeek: (n: number) => void;
   onThisWeek: () => void;
   onOpenDay: (d: string) => void;
@@ -163,6 +165,7 @@ export function WeekView({
           <h2 className="font-display mt-1 text-2xl tracking-tight text-ink sm:text-3xl">
             {isThisWeek ? "本週" : rangeLabel}
           </h2>
+          {notice}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {toggle}

@@ -23,7 +23,7 @@ const FALLBACK_COLOR = "#64748b";
 export function TimetableView() {
   const { timetable = [], courses, readOnly } = useSchool();
   const [editing, setEditing] = useState<TimetableSlot | "new" | null>(null);
-  const [mobileDay, setMobileDay] = useState(() => Math.min(isoWeekday(new Date()), 7));
+  const today = isoWeekday(new Date());
 
   const courseMap = useMemo(() => new Map(courses.map((c) => [c.id, c])), [courses]);
   const showWeekend = timetable.some((t) => t.day >= 6);
@@ -85,68 +85,58 @@ export function TimetableView() {
         </div>
       ) : (
         <>
-          {/* Mobile: one day at a time */}
-          <div className="sm:hidden">
-            <div className="flex gap-1 rounded-xl border border-border/70 bg-white p-1">
-              {[1, 2, 3, 4, 5, 6, 7].map((d) => {
-                const count = timetable.filter((t) => t.day === d).length;
-                return (
-                  <button
-                    key={d}
-                    type="button"
-                    onClick={() => setMobileDay(d)}
-                    className={`flex flex-1 flex-col items-center rounded-lg py-1.5 text-sm transition-colors ${
-                      mobileDay === d ? "bg-ink text-white" : "text-muted-foreground"
-                    }`}
-                  >
-                    {WEEKDAYS[d - 1]}
-                    <span
-                      className={`mt-0.5 size-1 rounded-full ${count ? (mobileDay === d ? "bg-white" : "bg-ink/50") : "bg-transparent"}`}
-                    />
-                  </button>
-                );
-              })}
-            </div>
-            <ul className="mt-3 space-y-2">
-              {timetable
-                .filter((t) => t.day === mobileDay)
-                .sort((a, b) => a.start.localeCompare(b.start))
-                .map((t) => {
-                  const { name, color } = slotInfo(t);
-                  return (
-                    <li key={t.id}>
-                      <button
-                        type="button"
-                        disabled={readOnly}
-                        onClick={() => setEditing(t)}
-                        className="flex w-full items-center gap-3 rounded-xl border border-border/70 bg-white px-3 py-3 text-left disabled:cursor-default"
-                      >
-                        <span className="h-10 w-1 shrink-0 rounded-full" style={{ backgroundColor: color }} />
-                        <span className="w-24 shrink-0 text-sm tabular-nums text-ink">
-                          {t.start}–{t.end}
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate font-medium text-ink">{name}</span>
-                          {t.location && (
-                            <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                              <MapPin className="size-3" />
-                              {t.location}
-                            </span>
-                          )}
-                        </span>
-                      </button>
-                    </li>
-                  );
-                })}
-              {timetable.every((t) => t.day !== mobileDay) && (
-                <li className="rounded-xl border border-dashed border-border/70 bg-white px-4 py-8 text-center text-sm text-muted-foreground">
-                  星期{WEEKDAYS[mobileDay - 1]}沒有課
-                </li>
-              )}
-            </ul>
+          {/* Phone: the whole week as a list, one section per day */}
+          <div className="space-y-4 sm:hidden">
+            {days.map((d) => {
+              const slots = timetable
+                .filter((t) => t.day === d)
+                .sort((a, b) => a.start.localeCompare(b.start));
+              return (
+                <section key={d}>
+                  <h3 className={`mb-1.5 text-sm ${d === today ? "font-medium text-ink" : "text-muted-foreground"}`}>
+                    星期{WEEKDAYS[d - 1]}
+                    {d === today && <span className="ml-1.5 text-xs text-teal-800">今天</span>}
+                  </h3>
+                  {slots.length === 0 ? (
+                    <p className="rounded-xl border border-dashed border-border/70 bg-white px-3 py-2.5 text-sm text-muted-foreground">
+                      沒有課
+                    </p>
+                  ) : (
+                    <ul className="space-y-2">
+                      {slots.map((t) => {
+                        const { name, color } = slotInfo(t);
+                        return (
+                          <li key={t.id}>
+                            <button
+                              type="button"
+                              disabled={readOnly}
+                              onClick={() => setEditing(t)}
+                              className="flex w-full items-center gap-3 rounded-xl border border-border/70 bg-white px-3 py-3 text-left disabled:cursor-default"
+                            >
+                              <span className="h-10 w-1 shrink-0 rounded-full" style={{ backgroundColor: color }} />
+                              <span className="w-24 shrink-0 text-sm tabular-nums text-ink">
+                                {t.start}–{t.end}
+                              </span>
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate font-medium text-ink">{name}</span>
+                                {t.location && (
+                                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                                    <MapPin className="size-3" />
+                                    {t.location}
+                                  </span>
+                                )}
+                              </span>
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </section>
+              );
+            })}
           </div>
 
-          {/* Desktop: weekly grid */}
           <div className="hidden overflow-hidden rounded-2xl border border-border/70 bg-white sm:block">
             <div
               className="grid border-b border-border/70 text-center text-sm text-muted-foreground"
@@ -156,7 +146,7 @@ export function TimetableView() {
               {days.map((d) => (
                 <span
                   key={d}
-                  className={`py-2 ${d === isoWeekday(new Date()) ? "font-medium text-ink" : ""}`}
+                  className={`py-2 ${d === today ? "font-medium text-ink" : ""}`}
                 >
                   星期{WEEKDAYS[d - 1]}
                 </span>
@@ -218,7 +208,7 @@ export function TimetableView() {
       {editing && (
         <SlotDialog
           slot={editing === "new" ? null : editing}
-          defaultDay={mobileDay}
+          defaultDay={today}
           onClose={() => setEditing(null)}
         />
       )}
