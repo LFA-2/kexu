@@ -105,6 +105,23 @@ type Work = {
   chain?: string;
 };
 
+/** Incomplete units of a course except the first one. Those must not be scheduled yet. */
+export function blockedUnitIds(school: SchoolState): Set<string> {
+  const open = new Map<string, { id: string; order: number }[]>();
+  for (const unit of school.progress) {
+    if (unit.completed) continue;
+    const list = open.get(unit.courseId) ?? [];
+    list.push({ id: unit.id, order: unit.order });
+    open.set(unit.courseId, list);
+  }
+  const blocked = new Set<string>();
+  for (const list of open.values()) {
+    list.sort((a, b) => a.order - b.order);
+    for (const unit of list.slice(1)) blocked.add(unit.id);
+  }
+  return blocked;
+}
+
 /** Everything school-related that still needs work, most urgent first. */
 export function openWork(date: string, school: SchoolState): Work[] {
   const courseName = new Map(school.courses.map((c) => [c.id, c.name]));
@@ -200,7 +217,10 @@ export function generatePlan(input: PlannerInput): DayPlan {
   const wd = isoWeekday(parseISO(date));
   const isToday = date === toDateKey(new Date());
   const dismissed = new Set(existing?.dismissed ?? []);
-  const kept = (existing?.items ?? []).filter((i) => i.manual);
+  const blocked = blockedUnitIds(school);
+  const kept = (existing?.items ?? []).filter(
+    (i) => i.manual && !(i.kind === "unit" && i.refId && blocked.has(i.refId)),
+  );
   const keptRefs = new Set(kept.flatMap((i) => (i.refId ? [`${i.kind}:${i.refId}`] : [])));
   const skip = (kind: PlanItemKind, ref: string) =>
     dismissed.has(`${kind}:${ref}`) || keptRefs.has(`${kind}:${ref}`);
@@ -276,11 +296,8 @@ export function generatePlan(input: PlannerInput): DayPlan {
     if (i.kind === "unit" && i.refId) alloc.set(i.refId, (alloc.get(i.refId) ?? 0) + i.minutes);
   }
   const left = (w: Work) => w.remaining - (alloc.get(w.refId) ?? 0);
-  /** A study unit can start only once the one before it is fully planned (or done). */
-  const ready = (w: Work): boolean => {
-    const p = w.prev ? byRef.get(w.prev) : undefined;
-    return !p || left(p) <= 0.5;
-  };
+  /** The next unit of a course stays locked until the previous one is actually finished. */
+  const ready = (w: Work): boolean => !w.prev || !byRef.has(w.prev);
   const give = (w: Work, m: number) => {
     if (!ready(w)) return 0;
     const add = Math.min(m, left(w));
@@ -288,18 +305,8 @@ export function generatePlan(input: PlannerInput): DayPlan {
     alloc.set(w.refId, (alloc.get(w.refId) ?? 0) + add);
     return add;
   };
-  /** Give minutes to a unit chain front to back, starting at w. */
-  const giveChain = (w: Work, m: number) => {
-    let total = 0;
-    for (const u of work) {
-      if (u.chain !== w.chain || u.kind !== "unit" || u.order < w.order) continue;
-      if (m - total <= 0) break;
-      const got = give(u, m - total);
-      total += got;
-      if (left(u) > 0.5) break;
-    }
-    return total;
-  };
+  /** Minutes land on this unit only. The next unit waits until this one is completed. */
+  const giveChain = (w: Work, m: number) => give(w, m);
 
   // 1. Due today/tomorrow or overdue: finish them, even past the budget.
   for (const w of work) {
@@ -345,8 +352,7 @@ export function generatePlan(input: PlannerInput): DayPlan {
     const m = Math.min(budget, round15(left(w)));
     const got = give(w, m);
     budget -= got;
-    // Finishing a unit lets the next one in its chain follow on the same day.
-    if (!w.chain || left(w) > 0.5) extra++;
+    extra++;
   }
 
   const schoolItems = work.flatMap((w) => {

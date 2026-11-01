@@ -31,6 +31,7 @@ import { listMeetings, saveMeeting, type Meeting } from "@/lib/meetings";
 import {
   CATEGORY_LABEL,
   CATEGORY_OF,
+  blockedUnitIds,
   generatePlan,
   itemFraction,
   openWork,
@@ -205,6 +206,19 @@ export function TodayView({ me, isMine, color }: { me: string; isMine: boolean; 
     autoDone.current.add(date);
     life.updatePlan(date, (prev) => prev ?? build());
   }, [readOnly, loaded, meetings, date, todayKey, life, build]);
+
+  // A later unit of a course must not sit on today while an earlier one is still open.
+  const blockedOnPlan = (life.plans?.[date]?.items ?? [])
+    .filter((i) => i.kind === "unit" && i.refId && blockedUnitIds(school).has(i.refId))
+    .map((i) => i.refId)
+    .join(",");
+  const repairedOrder = useRef("");
+  useEffect(() => {
+    if (readOnly || !loaded || date !== todayKey || !life.plans?.[date] || !blockedOnPlan) return;
+    if (repairedOrder.current === blockedOnPlan) return;
+    repairedOrder.current = blockedOnPlan;
+    life.updatePlan(date, (prev) => build(prev));
+  }, [readOnly, loaded, date, todayKey, life, blockedOnPlan, build]);
 
   // Keep the stored snapshot in line with the sources, so past days chart correctly.
   useEffect(() => {
@@ -848,10 +862,8 @@ function AddDialog({
   const [minutes, setMinutes] = useState<number | null>(30);
   const all = openWork(date, school);
   const openRefs = new Set(all.map((w) => w.refId));
-  // Study units go in order: only offer the next one of each course.
-  const work = all.filter(
-    (w) => !inPlan.has(w.refId) && (!w.prev || !openRefs.has(w.prev) || inPlan.has(w.prev)),
-  );
+  // The next unit of a course stays hidden until the previous one is finished.
+  const work = all.filter((w) => !inPlan.has(w.refId) && (!w.prev || !openRefs.has(w.prev)));
   const [pick, setPick] = useState<string | null>(null);
   const picked = work.find((w) => w.refId === pick);
 
@@ -860,7 +872,7 @@ function AddDialog({
       <DialogContent className="flex max-h-[90dvh] flex-col sm:max-w-md">
         <DialogHeader>
           <DialogTitle>新增到這天</DialogTitle>
-          <DialogDescription>從學校的作業／讀書進度挑（讀書依章節順序，只列下一個），或自己加一項。</DialogDescription>
+          <DialogDescription>從學校的作業／讀書進度挑。同一門課要先完成前一個單元，才會列出下一個。</DialogDescription>
         </DialogHeader>
         <div className="flex rounded-lg border border-border/80 p-0.5">
           {(["school", "custom"] as const).map((t) => (

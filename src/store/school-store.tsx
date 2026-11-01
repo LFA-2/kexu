@@ -38,6 +38,8 @@ type SchoolStore = SchoolState & {
   ) => void;
   toggleProgressUnit: (id: string) => void;
   removeProgressUnit: (id: string) => void;
+  /** Moves a unit among the others in its course. -1 is up, 1 is down. */
+  moveProgressUnit: (id: string, direction: -1 | 1) => void;
   updateHomework: (id: string, patch: Partial<Omit<Homework, "id" | "courseId">>) => void;
   updateExam: (id: string, patch: Partial<Omit<Exam, "id" | "courseId">>) => void;
   updateProgressUnit: (id: string, patch: Partial<Omit<ProgressUnit, "id" | "courseId">>) => void;
@@ -238,6 +240,28 @@ export function SchoolProvider({
     [mutate],
   );
 
+  const moveProgressUnit = useCallback(
+    (id: string, direction: -1 | 1) =>
+      mutate((prev) => {
+        const unit = prev.progress.find((p) => p.id === id);
+        if (!unit) return prev;
+        const units = prev.progress
+          .filter((p) => p.courseId === unit.courseId)
+          .sort((a, b) => a.order - b.order || a.createdAt.localeCompare(b.createdAt));
+        const index = units.findIndex((p) => p.id === id);
+        const next = index + direction;
+        if (index < 0 || next < 0 || next >= units.length) return prev;
+        const order = new Map(units.map((item, i) => [item.id, i]));
+        order.set(units[index].id, next);
+        order.set(units[next].id, index);
+        return {
+          ...prev,
+          progress: prev.progress.map((p) => (order.has(p.id) ? { ...p, order: order.get(p.id)! } : p)),
+        };
+      }),
+    [mutate],
+  );
+
   const updateHomework = useCallback(
     (id: string, patch: Partial<Omit<Homework, "id" | "courseId">>) =>
       mutate((prev) => ({
@@ -347,6 +371,7 @@ export function SchoolProvider({
     addProgressUnit,
     toggleProgressUnit,
     removeProgressUnit,
+    moveProgressUnit,
     updateHomework,
     updateExam,
     updateProgressUnit,

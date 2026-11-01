@@ -5,7 +5,7 @@ import { EditItemButton } from "@/components/school/add-item-dialog";
 import { UnitText } from "@/components/school/course-detail-view";
 import { Button } from "@/components/ui/button";
 import { useSchool } from "@/store/school-store";
-import { Trash2 } from "lucide-react";
+import { ChevronDown, ChevronUp, Trash2 } from "lucide-react";
 
 export function ProgressView() {
   const {
@@ -16,6 +16,7 @@ export function ProgressView() {
     courseProgress,
     toggleProgressUnit,
     removeProgressUnit,
+    moveProgressUnit,
   } = useSchool();
 
   if (courses.length === 0) {
@@ -35,7 +36,7 @@ export function ProgressView() {
         </h2>
         {!readOnly && (
           <p className="mt-2 text-xs text-muted-foreground">
-            新增單元請到「課程」→ 點進各門課。完成度依每個單元的預估時間加權。
+            新增單元請到「課程」→ 點進各門課。上下箭頭是閱讀順序，今日會先排最前面還沒完成的單元。
           </p>
         )}
       </header>
@@ -95,7 +96,7 @@ export function ProgressView() {
                 </p>
               ) : (
                 <ul className="mt-4 space-y-2">
-                  {units.map((unit) => (
+                  {units.map((unit, index) => (
                     <li
                       key={unit.id}
                       className="flex items-center gap-3 rounded-xl border border-border/60 bg-soft/60 px-3 py-2.5"
@@ -107,6 +108,30 @@ export function ProgressView() {
                         onToggle={() => toggleProgressUnit(unit.id)}
                       />
                       <UnitText unit={unit} exams={exams} color={course.color} />
+                      {!readOnly && units.length > 1 && (
+                        <span className="flex shrink-0">
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            className="text-muted-foreground"
+                            disabled={index === 0}
+                            onClick={() => moveProgressUnit(unit.id, -1)}
+                            aria-label="上移"
+                          >
+                            <ChevronUp />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            className="text-muted-foreground"
+                            disabled={index === units.length - 1}
+                            onClick={() => moveProgressUnit(unit.id, 1)}
+                            aria-label="下移"
+                          >
+                            <ChevronDown />
+                          </Button>
+                        </span>
+                      )}
                       {!readOnly && (
                         <EditItemButton kind="progress" courseId={course.id} id={unit.id} />
                       )}

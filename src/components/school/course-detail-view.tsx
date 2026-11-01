@@ -15,7 +15,7 @@ import {
   type ProgressUnit,
 } from "@/lib/types";
 import { useSchool } from "@/store/school-store";
-import { ArrowLeft, Trash2 } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronUp, Trash2 } from "lucide-react";
 
 export function CourseDetailView({
   courseId,
@@ -37,6 +37,7 @@ export function CourseDetailView({
     removeHomework,
     removeExam,
     removeProgressUnit,
+    moveProgressUnit,
     removeCourse,
   } = useSchool();
 
@@ -182,7 +183,7 @@ export function CourseDetailView({
           <EmptyLine text="尚未新增讀書單元" />
         ) : (
           <ul className="space-y-2">
-            {units.map((unit) => (
+            {units.map((unit, index) => (
               <li
                 key={unit.id}
                 className="flex items-center gap-3 rounded-xl border border-border/60 bg-card px-3 py-2.5"
@@ -194,6 +195,30 @@ export function CourseDetailView({
                   onToggle={() => toggleProgressUnit(unit.id)}
                 />
                 <UnitText unit={unit} exams={exams} color={course.color} />
+                {!readOnly && units.length > 1 && (
+                  <span className="flex shrink-0">
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      className="text-muted-foreground"
+                      disabled={index === 0}
+                      onClick={() => moveProgressUnit(unit.id, -1)}
+                      aria-label="上移"
+                    >
+                      <ChevronUp />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      className="text-muted-foreground"
+                      disabled={index === units.length - 1}
+                      onClick={() => moveProgressUnit(unit.id, 1)}
+                      aria-label="下移"
+                    >
+                      <ChevronDown />
+                    </Button>
+                  </span>
+                )}
                 {!readOnly && <EditItemButton kind="progress" courseId={course.id} id={unit.id} />}
                 {!readOnly && (
                   <Button
