@@ -31,14 +31,15 @@ import { listMeetings, saveMeeting, type Meeting } from "@/lib/meetings";
 import {
   CATEGORY_LABEL,
   CATEGORY_OF,
-  blockedUnitIds,
   generatePlan,
   itemFraction,
   openWork,
   planAhead,
   planCompletion,
+  planShortfalls,
   sortItems,
   sourceProgress,
+  unitBlockers,
   workItem,
   type LiveSources,
   type OpenAction,
@@ -63,7 +64,9 @@ import {
   Pencil,
   Plus,
   CalendarHeart,
+  Lock,
   RefreshCw,
+  RotateCcw,
   Settings2,
   Sparkles,
   Trash2,
@@ -74,6 +77,7 @@ const KIND_ICON: Record<PlanItem["kind"], LucideIcon> = {
   homework: ClipboardList,
   unit: BookOpen,
   exam: GraduationCap,
+  review: RotateCcw,
   habit: Sparkles,
   todo: ListTodo,
   workout: Dumbbell,
@@ -207,18 +211,23 @@ export function TodayView({ me, isMine, color }: { me: string; isMine: boolean; 
     life.updatePlan(date, (prev) => prev ?? build());
   }, [readOnly, loaded, meetings, date, todayKey, life, build]);
 
-  // A later unit of a course must not sit on today while an earlier one is still open.
-  const blockedOnPlan = (life.plans?.[date]?.items ?? [])
-    .filter((i) => i.kind === "unit" && i.refId && blockedUnitIds(school).has(i.refId))
-    .map((i) => i.refId)
-    .join(",");
-  const repairedOrder = useRef("");
-  useEffect(() => {
-    if (readOnly || !loaded || date !== todayKey || !life.plans?.[date] || !blockedOnPlan) return;
-    if (repairedOrder.current === blockedOnPlan) return;
-    repairedOrder.current = blockedOnPlan;
-    life.updatePlan(date, (prev) => build(prev));
-  }, [readOnly, loaded, date, todayKey, life, blockedOnPlan, build]);
+  const shortfalls = useMemo(
+    () =>
+      !loaded || meetings === null
+        ? []
+        : planShortfalls({
+            date: todayKey,
+            school,
+            life,
+            fitness,
+            exercises: fitness.allExercises,
+            actions: actions.filter((a) => !a.action.done),
+            existing: life.plans?.[todayKey],
+            fromMinute: nowMinute,
+          }),
+    [loaded, meetings, todayKey, school, life, fitness, actions, nowMinute],
+  );
+  const blockers = useMemo(() => unitBlockers(school), [school]);
 
   // Keep the stored snapshot in line with the sources, so past days chart correctly.
   useEffect(() => {
@@ -520,6 +529,16 @@ export function TodayView({ me, isMine, color }: { me: string; isMine: boolean; 
             </Button>
           )}
         </div>
+        {!readOnly && date === todayKey && shortfalls.length > 0 && (
+          <div className="rounded-xl bg-amber-50 px-3 py-2.5 text-sm text-amber-900 ring-1 ring-amber-300/80">
+            {shortfalls.slice(0, 2).map((s) => (
+              <p key={`${s.label}${s.date}`}>
+                「{s.label}」排不完，大約差 {formatMinutes(Math.round(s.minutes / 5) * 5 || 5)}
+              </p>
+            ))}
+            <p className="mt-1 text-xs text-amber-800/80">可以在排程設定（齒輪）提高「每天讀書／寫作業最多」，或調整預估時間。</p>
+          </div>
+        )}
         {!plan ? (
           <p className="rounded-2xl border border-dashed border-border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
             {readOnly || isPast ? "這天沒有計畫" : "正在排…"}
@@ -536,6 +555,7 @@ export function TodayView({ me, isMine, color }: { me: string; isMine: boolean; 
             future={isFuture}
             frac={frac}
             src={src}
+            blockers={isFuture ? undefined : blockers}
             onProgress={setProgress}
             onEdit={setEditing}
           />
@@ -599,6 +619,7 @@ function Timeline({
   future,
   frac,
   src,
+  blockers,
   onProgress,
   onEdit,
 }: {
@@ -608,6 +629,8 @@ function Timeline({
   future: boolean;
   frac: (i: PlanItem) => number;
   src: LiveSources;
+  /** locked unit id → title of the unit to finish first */
+  blockers?: Map<string, string>;
   onProgress: (i: PlanItem, pct: number) => void;
   onEdit: (i: PlanItem) => void;
 }) {
@@ -645,6 +668,7 @@ function Timeline({
             fraction={frac(r.item)}
             overall={sourceProgress(r.item, src)}
             workoutLogged={r.item.kind === "workout" && !!src.fitness?.sessions.some((s) => s.date === src.date)}
+            waitFor={r.item.kind === "unit" && r.item.refId ? blockers?.get(r.item.refId) : undefined}
             onProgress={(p) => onProgress(r.item, p)}
             onEdit={() => onEdit(r.item)}
           />
@@ -661,6 +685,7 @@ function ItemRow({
   fraction,
   overall,
   workoutLogged,
+  waitFor,
   onProgress,
   onEdit,
 }: {
@@ -671,6 +696,8 @@ function ItemRow({
   /** overall % of the source for school work, else null */
   overall: number | null;
   workoutLogged: boolean;
+  /** title of the unit that has to be finished before this one can start */
+  waitFor?: string;
   onProgress: (pct: number) => void;
   onEdit: () => void;
 }) {
@@ -683,7 +710,7 @@ function ItemRow({
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const shown = draft ?? value;
   const done = fraction >= 1;
-  const locked = readOnly || future || (item.kind === "workout" && workoutLogged);
+  const locked = readOnly || future || !!waitFor || (item.kind === "workout" && workoutLogged);
 
   function change(v: number) {
     setDraft(v);
@@ -756,7 +783,12 @@ function ItemRow({
             </div>
             <span className="w-11 shrink-0 text-right text-sm tabular-nums text-ink">{shown}%</span>
           </div>
-          {isWork ? (
+          {waitFor ? (
+            <p className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground">
+              <Lock className="size-3" />
+              完成「{waitFor}」後開始
+            </p>
+          ) : isWork ? (
             <p className="mt-1 text-[11px] text-muted-foreground">
               整體進度・{future ? "這天目標" : "今天目標"} {target}%{target === 100 ? "（做完）" : ""}
               {fraction >= 1 && " ✓"}
@@ -862,8 +894,10 @@ function AddDialog({
   const [minutes, setMinutes] = useState<number | null>(30);
   const all = openWork(date, school);
   const openRefs = new Set(all.map((w) => w.refId));
-  // The next unit of a course stays hidden until the previous one is finished.
-  const work = all.filter((w) => !inPlan.has(w.refId) && (!w.prev || !openRefs.has(w.prev)));
+  // Only the next unit in line: the previous one is finished or already planned for the day.
+  const work = all.filter(
+    (w) => !inPlan.has(w.refId) && (!w.prev || !openRefs.has(w.prev) || inPlan.has(w.prev)),
+  );
   const [pick, setPick] = useState<string | null>(null);
   const picked = work.find((w) => w.refId === pick);
 
@@ -872,7 +906,7 @@ function AddDialog({
       <DialogContent className="flex max-h-[90dvh] flex-col sm:max-w-md">
         <DialogHeader>
           <DialogTitle>新增到這天</DialogTitle>
-          <DialogDescription>從學校的作業／讀書進度挑。同一門課要先完成前一個單元，才會列出下一個。</DialogDescription>
+          <DialogDescription>從學校的作業／讀書進度挑。同一門課照順序讀，前一個單元做完或已排進這天，才會列出下一個。</DialogDescription>
         </DialogHeader>
         <div className="flex rounded-lg border border-border/80 p-0.5">
           {(["school", "custom"] as const).map((t) => (

@@ -99,6 +99,7 @@ export type PlanItemKind =
   | "todo"
   | "workout"
   | "action"
+  | "review"
   | "custom";
 
 export type PlanItem = {
