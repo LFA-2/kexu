@@ -20,6 +20,7 @@ import { Label } from "@/components/ui/label";
 import { isoWeekday, toDateKey } from "@/lib/dates";
 import {
   DEFAULT_PLAN_SETTINGS,
+  sortSchedule,
   toMinutes,
   type DayPlan,
   type PlanItem,
@@ -241,20 +242,31 @@ export function TodayView({ me, isMine }: { me: string; isMine: boolean }) {
     }));
   })();
 
-  // Classes on this day, shown in the timeline (not part of the % ).
-  const classes = useMemo(() => {
+  // Classes and 今明行程 entries on this day, shown in the timeline (not part of the %).
+  const classes = useMemo((): ClassRow[] => {
     const wd = isoWeekday(parseISO(date));
     const name = new Map(school.courses.map((c) => [c.id, c]));
-    return (school.timetable ?? [])
+    const lessons = (school.timetable ?? [])
       .filter((t) => t.day === wd)
       .map((t) => ({
+        prefix: "上課",
         start: t.start,
         end: t.end,
         title: (t.courseId && name.get(t.courseId)?.name) || t.title || "上課",
         location: t.location,
         color: (t.courseId && name.get(t.courseId)?.color) || "#64748b",
       }));
-  }, [school.timetable, school.courses, date]);
+    const plans = sortSchedule(life.schedule?.[date] ?? []).map((s) => ({
+      prefix: "行程",
+      start: s.start,
+      end: s.kind === "span" ? s.end : undefined,
+      title: s.label,
+      location: "",
+      color: "#475569",
+      point: s.kind === "point",
+    }));
+    return [...lessons, ...plans];
+  }, [school.timetable, school.courses, life.schedule, date]);
 
   function setProgress(item: PlanItem, pct: number) {
     const p = Math.max(0, Math.min(100, Math.round(pct)));
@@ -524,7 +536,16 @@ export function TodayView({ me, isMine }: { me: string; isMine: boolean }) {
   );
 }
 
-type ClassRow = { start: string; end: string; title: string; location: string; color: string };
+type ClassRow = {
+  prefix: string;
+  start: string;
+  end?: string;
+  title: string;
+  location: string;
+  color: string;
+  /** a moment (起床、出門…) rather than a time span */
+  point?: boolean;
+};
 
 function Timeline({
   items,
@@ -559,12 +580,16 @@ function Timeline({
             className="flex items-center gap-3 rounded-xl border border-dashed border-border/80 bg-slate-50/70 px-3 py-2 text-sm"
           >
             <span className="w-11 shrink-0 tabular-nums text-muted-foreground">{r.cls.start}</span>
-            <span className="h-6 w-1 rounded-full" style={{ backgroundColor: r.cls.color }} />
+            {r.cls.point ? (
+              <span className="mx-[-2px] size-2 rounded-full border-2 bg-white" style={{ borderColor: r.cls.color }} />
+            ) : (
+              <span className="h-6 w-1 rounded-full" style={{ backgroundColor: r.cls.color }} />
+            )}
             <span className="min-w-0 flex-1 truncate text-muted-foreground">
-              上課・{r.cls.title}
+              {r.cls.prefix}・{r.cls.title}
               {r.cls.location ? `（${r.cls.location}）` : ""}
             </span>
-            <span className="text-xs tabular-nums text-muted-foreground">~{r.cls.end}</span>
+            {r.cls.end && <span className="text-xs tabular-nums text-muted-foreground">~{r.cls.end}</span>}
           </li>
         ) : (
           <ItemRow
