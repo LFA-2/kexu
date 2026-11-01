@@ -171,7 +171,7 @@ function AddForm({ onAdd }: { onAdd: (item: Omit<ScheduleItem, "id">) => void })
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <div className="grid gap-1.5">
+        <div className="grid min-w-0 gap-1.5">
           <Label htmlFor="plan-start">{kind === "point" ? "時間" : "開始"}</Label>
           <Input
             id="plan-start"
@@ -181,7 +181,7 @@ function AddForm({ onAdd }: { onAdd: (item: Omit<ScheduleItem, "id">) => void })
           />
         </div>
         {kind === "span" && (
-          <div className="grid gap-1.5">
+          <div className="grid min-w-0 gap-1.5">
             <Label htmlFor="plan-end">結束</Label>
             <Input id="plan-end" type="time" value={end} onChange={(e) => setEnd(e.target.value)} />
           </div>

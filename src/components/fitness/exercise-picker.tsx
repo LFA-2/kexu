@@ -54,7 +54,7 @@ export function ExercisePicker({
           <DialogTitle>選擇動作</DialogTitle>
           <DialogDescription>找不到的話可以自己新增。</DialogDescription>
         </DialogHeader>
-        <div className="relative">
+        <div className="relative shrink-0">
           <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             className="pl-8"
@@ -63,13 +63,13 @@ export function ExercisePicker({
             onChange={(e) => setQ(e.target.value)}
           />
         </div>
-        <div className="flex gap-1 overflow-x-auto pb-1">
+        <div className="flex shrink-0 gap-1 overflow-x-auto pb-1">
           {(["all", ...MUSCLES] as const).map((m) => (
             <button
               key={m}
               type="button"
               onClick={() => setMuscle(m)}
-              className={`shrink-0 rounded-full border px-2.5 py-0.5 text-xs ${
+              className={`shrink-0 whitespace-nowrap rounded-full border px-2.5 py-1 text-xs ${
                 muscle === m ? "border-ink bg-ink text-white" : "border-border/80 text-muted-foreground"
               }`}
             >

@@ -580,3 +580,15 @@
 .progress-range:disabled::-moz-range-thumb {
   display: none;
 }
+
+/* iOS Safari gives date/time inputs an intrinsic min width that overflows narrow grid cells. */
+input[type="time"],
+input[type="date"] {
+  -webkit-appearance: none;
+  appearance: none;
+  min-width: 0;
+}
+input[type="time"]::-webkit-date-and-time-value,
+input[type="date"]::-webkit-date-and-time-value {
+  text-align: left;
+}
