@@ -533,3 +533,50 @@
     opacity: 1;
   }
 }
+
+/* Per-item progress slider on the 今日 page */
+.progress-range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 1.75rem;
+  background: transparent;
+  cursor: pointer;
+  touch-action: pan-y;
+}
+.progress-range:disabled {
+  cursor: default;
+}
+.progress-range::-webkit-slider-runnable-track {
+  height: 0.5rem;
+  border-radius: 999px;
+  background: linear-gradient(to right, var(--accent) var(--fill), #e8edf2 var(--fill));
+}
+.progress-range::-moz-range-track {
+  height: 0.5rem;
+  border-radius: 999px;
+  background: linear-gradient(to right, var(--accent) var(--fill), #e8edf2 var(--fill));
+}
+.progress-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  margin-top: -0.4rem;
+  width: 1.3rem;
+  height: 1.3rem;
+  border-radius: 999px;
+  background: #fff;
+  border: 2px solid var(--accent);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.2);
+}
+.progress-range::-moz-range-thumb {
+  width: 1.1rem;
+  height: 1.1rem;
+  border-radius: 999px;
+  background: #fff;
+  border: 2px solid var(--accent);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.2);
+}
+.progress-range:disabled::-webkit-slider-thumb {
+  display: none;
+}
+.progress-range:disabled::-moz-range-thumb {
+  display: none;
+}

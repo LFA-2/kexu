@@ -6,8 +6,11 @@ import { toDateKey } from "@/lib/dates";
 import {
   EMPTY_LIFE,
   isLifeState,
+  type DayPlan,
+  type Habit,
   type LifeState,
   type MetricKey,
+  type PlanSettings,
   type ScheduleItem,
   type Todo,
 } from "@/lib/life";
@@ -26,7 +29,18 @@ type LifeStore = LifeState & {
   toggleAvailable: (date: string) => void;
   addScheduleItem: (date: string, item: Omit<ScheduleItem, "id">) => void;
   removeScheduleItem: (date: string, id: string) => void;
+  addHabit: (input: Omit<Habit, "id" | "createdAt">) => void;
+  updateHabit: (id: string, patch: Partial<Omit<Habit, "id" | "createdAt">>) => void;
+  removeHabit: (id: string) => void;
+  setHabitDone: (date: string, id: string, done: boolean) => void;
+  setTodoDone: (id: string, done: boolean) => void;
+  /** Replace or edit one day's 今日 plan. */
+  updatePlan: (date: string, updater: (prev: DayPlan | undefined) => DayPlan | undefined) => void;
+  setPlanSettings: (settings: PlanSettings) => void;
 };
+
+const PLAN_KEEP_DAYS = 120;
+const HABIT_LOG_KEEP_DAYS = 400;
 
 const SCHEDULE_KEEP_DAYS = 14;
 
@@ -145,6 +159,84 @@ export function LifeProvider({
     [mutate],
   );
 
+  const addHabit = useCallback(
+    (input: Omit<Habit, "id" | "createdAt">) =>
+      mutate((prev) => ({
+        ...prev,
+        habits: [
+          ...(prev.habits ?? []),
+          {
+            ...input,
+            title: input.title.trim().slice(0, 40),
+            id: uid("habit"),
+            createdAt: new Date().toISOString(),
+          },
+        ],
+      })),
+    [mutate],
+  );
+
+  const updateHabit = useCallback(
+    (id: string, patch: Partial<Omit<Habit, "id" | "createdAt">>) =>
+      mutate((prev) => ({
+        ...prev,
+        habits: (prev.habits ?? []).map((h) => (h.id === id ? { ...h, ...patch } : h)),
+      })),
+    [mutate],
+  );
+
+  const removeHabit = useCallback(
+    (id: string) =>
+      mutate((prev) => ({ ...prev, habits: (prev.habits ?? []).filter((h) => h.id !== id) })),
+    [mutate],
+  );
+
+  const setHabitDone = useCallback(
+    (date: string, id: string, done: boolean) =>
+      mutate((prev) => {
+        const cutoff = toDateKey(subDays(new Date(), HABIT_LOG_KEEP_DAYS));
+        const log = Object.fromEntries(
+          Object.entries(prev.habitLog ?? {}).filter(([d]) => d >= cutoff),
+        );
+        const day = new Set(log[date] ?? []);
+        if (done) day.add(id);
+        else day.delete(id);
+        if (day.size) log[date] = [...day];
+        else delete log[date];
+        return { ...prev, habitLog: log };
+      }),
+    [mutate],
+  );
+
+  const setTodoDone = useCallback(
+    (id: string, done: boolean) =>
+      mutate((prev) => ({
+        ...prev,
+        todos: prev.todos.map((t) => (t.id === id ? { ...t, done } : t)),
+      })),
+    [mutate],
+  );
+
+  const updatePlan = useCallback(
+    (date: string, updater: (prev: DayPlan | undefined) => DayPlan | undefined) =>
+      mutate((prev) => {
+        const cutoff = toDateKey(subDays(new Date(), PLAN_KEEP_DAYS));
+        const plans = Object.fromEntries(
+          Object.entries(prev.plans ?? {}).filter(([d]) => d >= cutoff),
+        );
+        const next = updater(plans[date]);
+        if (next) plans[date] = next;
+        else delete plans[date];
+        return { ...prev, plans };
+      }),
+    [mutate],
+  );
+
+  const setPlanSettings = useCallback(
+    (planSettings: PlanSettings) => mutate((prev) => ({ ...prev, planSettings })),
+    [mutate],
+  );
+
   const value: LifeStore = {
     ...state,
     readOnly: !editable,
@@ -158,6 +250,13 @@ export function LifeProvider({
     toggleAvailable,
     addScheduleItem,
     removeScheduleItem,
+    addHabit,
+    updateHabit,
+    removeHabit,
+    setHabitDone,
+    setTodoDone,
+    updatePlan,
+    setPlanSettings,
   };
 
   return <LifeContext.Provider value={value}>{children}</LifeContext.Provider>;

@@ -2,26 +2,28 @@
 
 import { useState, type ReactNode } from "react";
 import { AvailabilityView } from "@/components/life/availability-view";
+import { HabitsView } from "@/components/life/habits-view";
 import { MetricChartView } from "@/components/life/metric-chart-view";
 import { MetricsPanel } from "@/components/life/metrics-panel";
 import { NoteCard } from "@/components/life/note-card";
 import { ScheduleView } from "@/components/life/schedule-view";
 import { TodosView } from "@/components/life/todos-view";
 import { addDays } from "date-fns";
-import { formatShortDate, toDateKey } from "@/lib/dates";
+import { formatShortDate, isoWeekday, toDateKey } from "@/lib/dates";
 import type { MetricKey } from "@/lib/life";
 import { useLife } from "@/store/life-store";
-import { CalendarHeart, ChevronRight, Clock, ListTodo } from "lucide-react";
+import { CalendarHeart, ChevronRight, Clock, ListTodo, Repeat } from "lucide-react";
 
 type Screen =
   | { type: "home" }
   | { type: "metric"; key: MetricKey }
   | { type: "schedule" }
   | { type: "todos" }
+  | { type: "habits" }
   | { type: "dates" };
 
 export function LifeView({ color }: { color: string }) {
-  const { todos, available, schedule } = useLife();
+  const { todos, available, schedule, habits = [], habitLog = {} } = useLife();
   const [screen, setScreen] = useState<Screen>({ type: "home" });
 
   function go(next: Screen) {
@@ -33,6 +35,7 @@ export function LifeView({ color }: { color: string }) {
   if (screen.type === "metric") return <MetricChartView initial={screen.key} onBack={back} />;
   if (screen.type === "schedule") return <ScheduleView color={color} onBack={back} />;
   if (screen.type === "todos") return <TodosView color={color} onBack={back} />;
+  if (screen.type === "habits") return <HabitsView color={color} onBack={back} />;
   if (screen.type === "dates") return <AvailabilityView color={color} onBack={back} />;
 
   const today = toDateKey(new Date());
@@ -43,6 +46,8 @@ export function LifeView({ color }: { color: string }) {
   const upcomingDates = available.filter((d) => d >= today);
   const todayPlans = schedule?.[today]?.length ?? 0;
   const tomorrowPlans = schedule?.[toDateKey(addDays(new Date(), 1))]?.length ?? 0;
+  const todayHabits = habits.filter((h) => h.days.includes(isoWeekday(new Date())));
+  const todayHabitsDone = todayHabits.filter((h) => habitLog[today]?.includes(h.id)).length;
 
   return (
     <div className="space-y-6">
@@ -53,7 +58,7 @@ export function LifeView({ color }: { color: string }) {
 
       <MetricsPanel onOpenMetric={(key) => go({ type: "metric", key })} />
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2">
         <EntryCard
           icon={<Clock className="size-5" />}
           title="今明行程"
@@ -73,6 +78,18 @@ export function LifeView({ color }: { color: string }) {
               : `${openTodos.length} 項未完成${next ? `・下一項 ${formatShortDate(next.date)} ${next.title}` : ""}`
           }
           onClick={() => go({ type: "todos" })}
+        />
+        <EntryCard
+          icon={<Repeat className="size-5" />}
+          title="習慣"
+          summary={
+            habits.length === 0
+              ? "設定每週要做的家事"
+              : todayHabits.length === 0
+                ? `${habits.length} 個習慣・今天沒有`
+                : `今天 ${todayHabitsDone}/${todayHabits.length} 完成・${todayHabits.map((h) => h.title).join("、")}`
+          }
+          onClick={() => go({ type: "habits" })}
         />
         <EntryCard
           icon={<CalendarHeart className="size-5" />}

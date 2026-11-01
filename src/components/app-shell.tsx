@@ -10,26 +10,44 @@ import { SharedView, type Person } from "@/components/shared-view";
 import { CoursesView } from "@/components/school/courses-view";
 import { ProgressView } from "@/components/school/progress-view";
 import { TimelineView } from "@/components/school/timeline-view";
+import { TimetableView } from "@/components/school/timetable-view";
+import { FitnessView } from "@/components/fitness/fitness-view";
+import { TodayView } from "@/components/today/today-view";
 import { PERSON_COLORS } from "@/lib/life";
 import { supabaseConfigured } from "@/lib/supabase";
 import type { Category, SchoolView } from "@/lib/types";
 import { AuthProvider, useAuth } from "@/store/auth-store";
 import { LifeProvider, useLife } from "@/store/life-store";
 import { LinksProvider, useLinks } from "@/store/links-store";
+import { FitnessProvider, useFitness } from "@/store/fitness-store";
 import { SchoolProvider, useSchool, type SyncStatus } from "@/store/school-store";
-import { BookOpen, CalendarDays, ClipboardList, Eye, GraduationCap } from "lucide-react";
+import {
+  BookOpen,
+  CalendarDays,
+  ClipboardList,
+  Dumbbell,
+  Eye,
+  GraduationCap,
+  Heart,
+  LayoutGrid,
+  Sun,
+  Users,
+} from "lucide-react";
 
 const NAV: { id: SchoolView; label: string; icon: typeof BookOpen }[] = [
   { id: "courses", label: "課程", icon: BookOpen },
+  { id: "timetable", label: "課表", icon: LayoutGrid },
   { id: "progress", label: "讀書進度", icon: CalendarDays },
   { id: "homework", label: "作業", icon: ClipboardList },
   { id: "exams", label: "考試", icon: GraduationCap },
 ];
 
-const CATEGORIES: { id: Category; label: string }[] = [
-  { id: "school", label: "學校" },
-  { id: "life", label: "生活" },
-  { id: "shared", label: "共同" },
+const CATEGORIES: { id: Category; label: string; icon: typeof BookOpen }[] = [
+  { id: "today", label: "今日", icon: Sun },
+  { id: "school", label: "學校", icon: GraduationCap },
+  { id: "life", label: "生活", icon: Heart },
+  { id: "fitness", label: "運動", icon: Dumbbell },
+  { id: "shared", label: "共同", icon: Users },
 ];
 
 const SYNC_LABEL: Record<SyncStatus, string> = {
@@ -79,7 +97,7 @@ function Gate() {
 function MainApp({ me }: { me: string }) {
   const { profile } = useAuth();
   const { linked, incoming } = useLinks();
-  const [category, setCategory] = useState<Category>("school");
+  const [category, setCategory] = useState<Category>("today");
   const [view, setView] = useState<SchoolView>("courses");
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
   const [viewingId, setViewingId] = useState(me);
@@ -103,7 +121,8 @@ function MainApp({ me }: { me: string }) {
   const isMine = ownerId === me;
   const ownerColor = people.find((p) => p.userId === ownerId)?.color ?? PERSON_COLORS[0];
   const activeCategory: Category =
-    category === "shared" && linked.length === 0 ? "school" : category;
+    category === "shared" && linked.length === 0 ? "today" : category;
+  const categories = CATEGORIES.filter((c) => c.id !== "shared" || linked.length > 0);
 
   function goView(next: SchoolView) {
     setView(next);
@@ -117,29 +136,31 @@ function MainApp({ me }: { me: string }) {
   }
 
   const initial = (profile?.display_name || "我").slice(0, 1);
-  const showSchoolNav = activeCategory === "school" && !showAccount;
+
+  function goCategory(id: Category) {
+    setCategory(id);
+    setShowAccount(false);
+    window.scrollTo({ top: 0 });
+  }
 
   return (
     <div className="relative min-h-full bg-background">
       <div className="relative mx-auto flex min-h-full max-w-5xl flex-col px-4 pb-24 pt-6 sm:px-6 sm:pb-10 sm:pt-8">
         <header className="animate-fade-up">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
               <p className="font-display text-3xl tracking-tight text-ink sm:text-5xl">你並沒有那麼聰明</p>
               <p className="mt-2 max-w-md text-sm leading-relaxed text-muted-foreground sm:text-base">
-                學校的課程、作業、考試，加上每天的生活狀態，收在同一個地方。
+                今天要做什麼、學校、生活、運動，收在同一個地方。
               </p>
             </div>
             <div className="flex items-center gap-2">
-              <div className="flex rounded-xl border border-border/80 bg-white p-1 shadow-sm">
-                {CATEGORIES.filter((c) => c.id !== "shared" || linked.length > 0).map((c) => (
+              <div className="hidden rounded-xl border border-border/80 bg-white p-1 shadow-sm sm:flex">
+                {categories.map((c) => (
                   <CategoryTab
                     key={c.id}
                     active={activeCategory === c.id && !showAccount}
-                    onClick={() => {
-                      setCategory(c.id);
-                      setShowAccount(false);
-                    }}
+                    onClick={() => goCategory(c.id)}
                     label={c.label}
                   />
                 ))}
@@ -191,7 +212,7 @@ function MainApp({ me }: { me: string }) {
 
             {activeCategory === "school" && (
               <nav
-                className="animate-fade-up mt-6 hidden gap-1 rounded-2xl border border-border/70 bg-white p-1.5 shadow-sm sm:flex"
+                className="animate-fade-up -mx-4 mt-6 flex gap-1 overflow-x-auto px-4 sm:mx-0 sm:rounded-2xl sm:border sm:border-border/70 sm:bg-white sm:p-1.5 sm:shadow-sm"
                 style={{ animationDelay: "60ms" }}
                 aria-label="學校導覽"
               >
@@ -203,10 +224,10 @@ function MainApp({ me }: { me: string }) {
                       key={item.id}
                       type="button"
                       onClick={() => goView(item.id)}
-                      className={`flex flex-1 items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium transition-all ${
+                      className={`flex shrink-0 items-center justify-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-medium transition-all sm:flex-1 sm:gap-2 sm:rounded-xl sm:border-transparent sm:px-3 sm:py-2.5 ${
                         active
-                          ? "bg-ink text-white shadow-sm"
-                          : "text-muted-foreground hover:bg-slate-100 hover:text-ink"
+                          ? "border-ink bg-ink text-white shadow-sm"
+                          : "border-border/80 bg-white text-muted-foreground hover:bg-slate-100 hover:text-ink"
                       }`}
                     >
                       <Icon className="size-4" />
@@ -224,7 +245,15 @@ function MainApp({ me }: { me: string }) {
               </div>
             )}
 
-            {activeCategory === "school" ? (
+            {activeCategory === "today" ? (
+              <SchoolProvider key={`s-${ownerId}`} ownerId={ownerId} editable={isMine}>
+                <LifeProvider key={`l-${ownerId}`} ownerId={ownerId} editable={isMine}>
+                  <FitnessProvider key={`f-${ownerId}`} ownerId={ownerId} editable={isMine}>
+                    <TodayMain me={me} isMine={isMine} />
+                  </FitnessProvider>
+                </LifeProvider>
+              </SchoolProvider>
+            ) : activeCategory === "school" ? (
               <SchoolProvider key={ownerId} ownerId={ownerId} editable={isMine}>
                 <SchoolMain
                   view={view}
@@ -232,6 +261,10 @@ function MainApp({ me }: { me: string }) {
                   onSelectCourse={setSelectedCourseId}
                 />
               </SchoolProvider>
+            ) : activeCategory === "fitness" ? (
+              <FitnessProvider key={ownerId} ownerId={ownerId} editable={isMine}>
+                <FitnessMain owner={ownerId} />
+              </FitnessProvider>
             ) : (
               <LifeProvider key={ownerId} ownerId={ownerId} editable={isMine}>
                 <LifeMain color={ownerColor} />
@@ -241,32 +274,31 @@ function MainApp({ me }: { me: string }) {
         )}
       </div>
 
-      {showSchoolNav && (
-        <nav
-          className="fixed inset-x-0 bottom-0 z-40 border-t border-border/80 bg-white px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 sm:hidden"
-          aria-label="手機導覽"
-        >
-          <div className="mx-auto flex max-w-lg justify-between gap-1">
-            {NAV.map((item) => {
-              const Icon = item.icon;
-              const active = view === item.id;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => goView(item.id)}
-                  className={`flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-lg px-1 py-1.5 text-[10px] font-medium transition-colors ${
-                    active ? "text-teal-800" : "text-muted-foreground"
-                  }`}
-                >
-                  <Icon className={`size-5 ${active ? "stroke-[2.25]" : ""}`} />
-                  <span className="truncate">{item.label}</span>
-                </button>
-              );
-            })}
-          </div>
-        </nav>
-      )}
+      <nav
+        className="fixed inset-x-0 bottom-0 z-40 border-t border-border/80 bg-white px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 sm:hidden"
+        aria-label="手機導覽"
+      >
+        <div className="mx-auto flex max-w-lg justify-between gap-1">
+          {categories.map((item) => {
+            const Icon = item.icon;
+            const active = activeCategory === item.id && !showAccount;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => goCategory(item.id)}
+                className={`flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-lg px-1 py-1.5 text-[11px] font-medium transition-colors ${
+                  active ? "text-teal-800" : "text-muted-foreground"
+                }`}
+                aria-current={active ? "page" : undefined}
+              >
+                <Icon className={`size-5 ${active ? "stroke-[2.25]" : ""}`} />
+                <span className="truncate">{item.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </nav>
     </div>
   );
 }
@@ -292,6 +324,7 @@ function SchoolMain({
             {view === "courses" && (
               <CoursesView selectedCourseId={selectedCourseId} onSelectCourse={onSelectCourse} />
             )}
+            {view === "timetable" && <TimetableView />}
             {view === "progress" && <ProgressView />}
             {view === "homework" && <TimelineView kind="homework" />}
             {view === "exams" && <TimelineView kind="exam" />}
@@ -306,6 +339,44 @@ function SchoolMain({
         {!readOnly && <DataTools />}
       </div>
     </>
+  );
+}
+
+function TodayMain({ me, isMine }: { me: string; isMine: boolean }) {
+  const { syncStatus } = useLife();
+  return (
+    <>
+      <main className="animate-fade-up mt-8 flex-1" style={{ animationDelay: "100ms" }}>
+        <TodayView me={me} isMine={isMine} />
+      </main>
+      <SyncFooter status={syncStatus} />
+    </>
+  );
+}
+
+function FitnessMain({ owner }: { owner: string }) {
+  const { loaded, syncStatus } = useFitness();
+  return (
+    <>
+      <main className="animate-fade-up mt-8 flex-1" style={{ animationDelay: "100ms" }}>
+        {loaded ? (
+          <FitnessView owner={owner} />
+        ) : (
+          <p className="py-16 text-center text-sm text-muted-foreground">載入中…</p>
+        )}
+      </main>
+      <SyncFooter status={syncStatus} />
+    </>
+  );
+}
+
+function SyncFooter({ status }: { status: SyncStatus }) {
+  return (
+    <div className="mt-10 flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-4 text-xs text-muted-foreground">
+      <span className={status === "offline" ? "text-destructive" : undefined}>
+        {SYNC_LABEL[status]}
+      </span>
+    </div>
   );
 }
 

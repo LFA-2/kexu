@@ -1,13 +1,22 @@
 "use client";
 
 import { CheckButton } from "@/components/check-button";
+import { EditItemButton } from "@/components/school/add-item-dialog";
+import { UnitText } from "@/components/school/course-detail-view";
 import { Button } from "@/components/ui/button";
 import { useSchool } from "@/store/school-store";
 import { Trash2 } from "lucide-react";
 
 export function ProgressView() {
-  const { courses, progress, readOnly, courseProgress, toggleProgressUnit, removeProgressUnit } =
-    useSchool();
+  const {
+    courses,
+    progress,
+    exams,
+    readOnly,
+    courseProgress,
+    toggleProgressUnit,
+    removeProgressUnit,
+  } = useSchool();
 
   if (courses.length === 0) {
     return (
@@ -25,7 +34,9 @@ export function ProgressView() {
           讀書進度
         </h2>
         {!readOnly && (
-          <p className="mt-2 text-xs text-muted-foreground">新增單元請到「課程」→ 點進各門課。</p>
+          <p className="mt-2 text-xs text-muted-foreground">
+            新增單元請到「課程」→ 點進各門課。完成度依每個單元的預估時間加權。
+          </p>
         )}
       </header>
 
@@ -95,13 +106,10 @@ export function ProgressView() {
                         readOnly={readOnly}
                         onToggle={() => toggleProgressUnit(unit.id)}
                       />
-                      <span
-                        className={`min-w-0 flex-1 text-sm ${
-                          unit.completed ? "text-muted-foreground line-through" : "text-ink"
-                        }`}
-                      >
-                        {unit.title}
-                      </span>
+                      <UnitText unit={unit} exams={exams} color={course.color} />
+                      {!readOnly && (
+                        <EditItemButton kind="progress" courseId={course.id} id={unit.id} />
+                      )}
                       {!readOnly && (
                         <Button
                           variant="ghost"

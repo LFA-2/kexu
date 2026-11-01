@@ -4,10 +4,13 @@ import { createContext, useCallback, useContext, type ReactNode } from "react";
 import {
   EMPTY_STATE,
   isSchoolState,
+  unitMinutes,
   type Course,
   type Exam,
   type Homework,
+  type ProgressUnit,
   type SchoolState,
+  type TimetableSlot,
 } from "@/lib/types";
 import { uid } from "@/lib/utils";
 import { useCloudDoc, type SyncStatus } from "@/store/cloud-doc";
@@ -20,7 +23,7 @@ type SchoolStore = SchoolState & {
   readOnly: boolean;
   loaded: boolean;
   syncStatus: SyncStatus;
-  addCourse: (name: string, color: string) => void;
+  addCourse: (name: string, color: string) => string;
   removeCourse: (id: string) => void;
   addHomework: (input: Omit<Homework, "id" | "createdAt" | "done">) => void;
   toggleHomework: (id: string) => void;
@@ -28,12 +31,26 @@ type SchoolStore = SchoolState & {
   addExam: (input: Omit<Exam, "id" | "createdAt" | "done">) => void;
   toggleExam: (id: string) => void;
   removeExam: (id: string) => void;
-  addProgressUnit: (courseId: string, title: string) => void;
+  addProgressUnit: (
+    courseId: string,
+    title: string,
+    extra?: Pick<ProgressUnit, "estimatedMinutes" | "dueDate">,
+  ) => void;
   toggleProgressUnit: (id: string) => void;
   removeProgressUnit: (id: string) => void;
+  updateHomework: (id: string, patch: Partial<Omit<Homework, "id" | "courseId">>) => void;
+  updateExam: (id: string, patch: Partial<Omit<Exam, "id" | "courseId">>) => void;
+  updateProgressUnit: (id: string, patch: Partial<Omit<ProgressUnit, "id" | "courseId">>) => void;
+  /** Sets 0–100 progress; 100 marks the item done, anything lower un-marks it. */
+  setWorkProgress: (kind: "homework" | "unit", id: string, pct: number) => void;
+  addTimetableSlot: (slot: Omit<TimetableSlot, "id">) => void;
+  updateTimetableSlot: (id: string, patch: Partial<Omit<TimetableSlot, "id">>) => void;
+  removeTimetableSlot: (id: string) => void;
   replaceAll: (state: SchoolState) => void;
   courseProgress: (courseId: string) => { total: number; done: number; pct: number };
 };
+
+const undoneProgress = (p: number | undefined) => (p === undefined || p >= 100 ? 0 : p);
 
 const SchoolContext = createContext<SchoolStore | null>(null);
 
@@ -91,6 +108,7 @@ export function SchoolProvider({
         createdAt: new Date().toISOString(),
       };
       mutate((prev) => ({ ...prev, courses: [...prev.courses, course] }));
+      return course.id;
     },
     [mutate],
   );
@@ -98,10 +116,14 @@ export function SchoolProvider({
   const removeCourse = useCallback(
     (id: string) =>
       mutate((prev) => ({
+        ...prev,
         courses: prev.courses.filter((c) => c.id !== id),
         homework: prev.homework.filter((h) => h.courseId !== id),
         exams: prev.exams.filter((e) => e.courseId !== id),
         progress: prev.progress.filter((p) => p.courseId !== id),
+        timetable: (prev.timetable ?? []).map((t) =>
+          t.courseId === id ? { ...t, courseId: null } : t,
+        ),
       })),
     [mutate],
   );
@@ -123,7 +145,9 @@ export function SchoolProvider({
     (id: string) =>
       mutate((prev) => ({
         ...prev,
-        homework: prev.homework.map((h) => (h.id === id ? { ...h, done: !h.done } : h)),
+        homework: prev.homework.map((h) =>
+          h.id === id ? { ...h, done: !h.done, progress: h.done ? undoneProgress(h.progress) : 100 } : h,
+        ),
       })),
     [mutate],
   );
@@ -163,7 +187,11 @@ export function SchoolProvider({
   );
 
   const addProgressUnit = useCallback(
-    (courseId: string, title: string) => {
+    (
+      courseId: string,
+      title: string,
+      extra?: Pick<ProgressUnit, "estimatedMinutes" | "dueDate">,
+    ) => {
       const id = uid("pu");
       const createdAt = new Date().toISOString();
       mutate((prev) => ({
@@ -177,6 +205,7 @@ export function SchoolProvider({
             completed: false,
             order: prev.progress.filter((p) => p.courseId === courseId).length,
             createdAt,
+            ...extra,
           },
         ],
       }));
@@ -189,7 +218,9 @@ export function SchoolProvider({
       mutate((prev) => ({
         ...prev,
         progress: prev.progress.map((p) =>
-          p.id === id ? { ...p, completed: !p.completed } : p,
+          p.id === id
+            ? { ...p, completed: !p.completed, progress: p.completed ? undoneProgress(p.progress) : 100 }
+            : p,
         ),
       })),
     [mutate],
@@ -197,7 +228,88 @@ export function SchoolProvider({
 
   const removeProgressUnit = useCallback(
     (id: string) =>
-      mutate((prev) => ({ ...prev, progress: prev.progress.filter((p) => p.id !== id) })),
+      mutate((prev) => ({
+        ...prev,
+        progress: prev.progress.filter((p) => p.id !== id),
+        exams: prev.exams.map((e) =>
+          e.scope?.includes(id) ? { ...e, scope: e.scope.filter((s) => s !== id) } : e,
+        ),
+      })),
+    [mutate],
+  );
+
+  const updateHomework = useCallback(
+    (id: string, patch: Partial<Omit<Homework, "id" | "courseId">>) =>
+      mutate((prev) => ({
+        ...prev,
+        homework: prev.homework.map((h) => (h.id === id ? { ...h, ...patch } : h)),
+      })),
+    [mutate],
+  );
+
+  const updateExam = useCallback(
+    (id: string, patch: Partial<Omit<Exam, "id" | "courseId">>) =>
+      mutate((prev) => ({
+        ...prev,
+        exams: prev.exams.map((e) => (e.id === id ? { ...e, ...patch } : e)),
+      })),
+    [mutate],
+  );
+
+  const updateProgressUnit = useCallback(
+    (id: string, patch: Partial<Omit<ProgressUnit, "id" | "courseId">>) =>
+      mutate((prev) => ({
+        ...prev,
+        progress: prev.progress.map((p) => (p.id === id ? { ...p, ...patch } : p)),
+      })),
+    [mutate],
+  );
+
+  const setWorkProgress = useCallback(
+    (kind: "homework" | "unit", id: string, pct: number) => {
+      const progress = Math.max(0, Math.min(100, Math.round(pct)));
+      const done = progress >= 100;
+      mutate((prev) =>
+        kind === "homework"
+          ? {
+              ...prev,
+              homework: prev.homework.map((h) => (h.id === id ? { ...h, progress, done } : h)),
+            }
+          : {
+              ...prev,
+              progress: prev.progress.map((p) =>
+                p.id === id ? { ...p, progress, completed: done } : p,
+              ),
+            },
+      );
+    },
+    [mutate],
+  );
+
+  const addTimetableSlot = useCallback(
+    (slot: Omit<TimetableSlot, "id">) =>
+      mutate((prev) => ({
+        ...prev,
+        timetable: [...(prev.timetable ?? []), { ...slot, id: uid("tt") }],
+      })),
+    [mutate],
+  );
+
+  const updateTimetableSlot = useCallback(
+    (id: string, patch: Partial<Omit<TimetableSlot, "id">>) =>
+      mutate((prev) => ({
+        ...prev,
+        timetable: (prev.timetable ?? []).map((t) => (t.id === id ? { ...t, ...patch } : t)),
+      })),
+    [mutate],
+  );
+
+  const removeTimetableSlot = useCallback(
+    (id: string) =>
+      mutate((prev) => ({
+        ...prev,
+        timetable: (prev.timetable ?? []).filter((t) => t.id !== id),
+      })),
     [mutate],
   );
 
@@ -208,7 +320,13 @@ export function SchoolProvider({
       const units = state.progress.filter((p) => p.courseId === courseId);
       const total = units.length;
       const done = units.filter((p) => p.completed).length;
-      return { total, done, pct: total === 0 ? 0 : Math.round((done / total) * 100) };
+      // Weighted by estimated time, counting partial progress.
+      const weight = units.reduce((a, u) => a + unitMinutes(u), 0);
+      const got = units.reduce(
+        (a, u) => a + unitMinutes(u) * (u.completed ? 1 : (u.progress ?? 0) / 100),
+        0,
+      );
+      return { total, done, pct: weight === 0 ? 0 : Math.round((got / weight) * 100) };
     },
     [state.progress],
   );
@@ -229,6 +347,13 @@ export function SchoolProvider({
     addProgressUnit,
     toggleProgressUnit,
     removeProgressUnit,
+    updateHomework,
+    updateExam,
+    updateProgressUnit,
+    setWorkProgress,
+    addTimetableSlot,
+    updateTimetableSlot,
+    removeTimetableSlot,
     replaceAll,
     courseProgress,
   };

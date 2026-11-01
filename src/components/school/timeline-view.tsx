@@ -7,6 +7,9 @@ import { MonthCalendar } from "@/components/month-calendar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatShortDate, relativeStatus } from "@/lib/dates";
+import { EditItemButton } from "@/components/school/add-item-dialog";
+import { ExamScope } from "@/components/school/course-detail-view";
+import { formatMinutes, homeworkMinutes, type Exam } from "@/lib/types";
 import { useSchool } from "@/store/school-store";
 import { Trash2 } from "lucide-react";
 
@@ -17,6 +20,7 @@ export function TimelineView({ kind }: { kind: Kind }) {
     courses,
     homework,
     exams,
+    progress,
     readOnly,
     toggleHomework,
     toggleExam,
@@ -33,8 +37,13 @@ export function TimelineView({ kind }: { kind: Kind }) {
   const items = useMemo(
     () =>
       kind === "homework"
-        ? homework.map((h) => ({ ...h, date: h.dueDate }))
-        : exams.map((e) => ({ ...e })),
+        ? homework.map((h) => ({
+            ...h,
+            date: h.dueDate,
+            meta: `約 ${formatMinutes(homeworkMinutes(h))}`,
+            exam: null as Exam | null,
+          }))
+        : exams.map((e) => ({ ...e, meta: "", exam: e as Exam | null })),
     [kind, homework, exams],
   );
 
@@ -147,9 +156,24 @@ export function TimelineView({ kind }: { kind: Kind }) {
                               </div>
                               <p className="mt-1 text-xs text-muted-foreground">
                                 {formatShortDate(item.date)}
+                                {item.meta ? ` · ${item.meta}` : ""}
                                 {item.note ? ` · ${item.note}` : ""}
                               </p>
+                              {item.exam && (
+                                <ExamScope
+                                  exam={item.exam}
+                                  units={progress.filter((p) => p.courseId === course.id)}
+                                  color={course.color}
+                                />
+                              )}
                             </div>
+                            {!readOnly && (
+                              <EditItemButton
+                                kind={kind === "homework" ? "homework" : "exam"}
+                                courseId={course.id}
+                                id={item.id}
+                              />
+                            )}
                             {!readOnly && (
                               <Button
                                 variant="ghost"

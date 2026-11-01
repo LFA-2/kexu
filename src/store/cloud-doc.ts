@@ -11,8 +11,8 @@ type Stored<T> = { version: number; state: T };
 type Updater<T> = (prev: T) => T;
 
 export type CloudDocOptions<T> = {
-  table: "school_data" | "life_data";
-  rpc: "save_school_data" | "save_life_data";
+  table: "school_data" | "life_data" | "fitness_data";
+  rpc: "save_school_data" | "save_life_data" | "save_fitness_data";
   cacheKey: string;
   ownerId: string;
   editable: boolean;

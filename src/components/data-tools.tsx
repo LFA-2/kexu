@@ -7,7 +7,7 @@ import { useSchool } from "@/store/school-store";
 import { Download, Upload } from "lucide-react";
 
 export function DataTools() {
-  const { courses, homework, exams, progress, replaceAll } = useSchool();
+  const { courses, homework, exams, progress, timetable, replaceAll } = useSchool();
   const fileRef = useRef<HTMLInputElement>(null);
 
   async function onImport(file: File) {
@@ -28,7 +28,7 @@ export function DataTools() {
         variant="ghost"
         size="sm"
         className="gap-1.5 text-muted-foreground"
-        onClick={() => shareOrDownloadBackup({ courses, homework, exams, progress })}
+        onClick={() => shareOrDownloadBackup({ courses, homework, exams, progress, timetable })}
       >
         <Download className="size-3.5" />
         匯出備份

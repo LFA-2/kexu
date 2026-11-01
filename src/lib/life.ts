@@ -45,6 +45,88 @@ export type LifeState = {
   available: string[];
   /** dateKey → main plans for that day (absent in data saved before this existed) */
   schedule?: Record<string, ScheduleItem[]>;
+  /** Weekly chores / habits */
+  habits?: Habit[];
+  /** dateKey → ids of habits done that day */
+  habitLog?: Record<string, string[]>;
+  /** dateKey → the 今日 plan for that day */
+  plans?: Record<string, DayPlan>;
+  planSettings?: PlanSettings;
+};
+
+export type Habit = {
+  id: string;
+  title: string;
+  /** 1 = Monday … 7 = Sunday */
+  days: number[];
+  minutes: number;
+  /** Preferred time HH:mm, or "" */
+  time: string;
+  icon: string;
+  createdAt: string;
+};
+
+export const HABIT_ICONS = ["🗑️", "🧺", "🧹", "🍽️", "🪴", "🛏️", "🧽", "🐾", "🛒", "📚", "💊", "💧"];
+
+export const HABIT_PRESETS: { title: string; icon: string; minutes: number }[] = [
+  { title: "倒垃圾", icon: "🗑️", minutes: 10 },
+  { title: "洗衣服", icon: "🧺", minutes: 20 },
+  { title: "掃地拖地", icon: "🧹", minutes: 30 },
+  { title: "洗碗", icon: "🍽️", minutes: 15 },
+  { title: "澆花", icon: "🪴", minutes: 5 },
+  { title: "換床單", icon: "🛏️", minutes: 15 },
+  { title: "刷浴室", icon: "🧽", minutes: 30 },
+  { title: "買菜", icon: "🛒", minutes: 40 },
+];
+
+export type PlanItemKind =
+  | "homework"
+  | "unit"
+  | "exam"
+  | "habit"
+  | "todo"
+  | "workout"
+  | "action"
+  | "custom";
+
+export type PlanItem = {
+  id: string;
+  kind: PlanItemKind;
+  /** Source id: homework/unit/exam/habit/todo/routine id, or "meetingId:actionId" */
+  refId?: string;
+  title: string;
+  detail: string;
+  minutes: number;
+  /** HH:mm or "" */
+  start: string;
+  /** 0–100 progress of today's portion */
+  progress: number;
+  /** Source progress (0–100) when the plan was made; homework/unit only */
+  base?: number;
+  /** How many source progress points today's portion is worth; homework/unit only */
+  share?: number;
+  /** Added or edited by hand, kept when the plan is regenerated */
+  manual?: boolean;
+};
+
+export type DayPlan = {
+  generatedAt: string;
+  items: PlanItem[];
+  /** refIds the user removed, so regenerating does not bring them back */
+  dismissed?: string[];
+};
+
+export type PlanSettings = {
+  dayStart: string; // HH:mm
+  dayEnd: string; // HH:mm
+  /** Upper bound on school work per day, minutes */
+  studyBudget: number;
+};
+
+export const DEFAULT_PLAN_SETTINGS: PlanSettings = {
+  dayStart: "08:00",
+  dayEnd: "23:00",
+  studyBudget: 240,
 };
 
 export function toMinutes(time: string) {

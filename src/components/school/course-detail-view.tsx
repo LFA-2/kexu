@@ -2,10 +2,18 @@
 
 import type { ReactNode } from "react";
 import { CheckButton } from "@/components/check-button";
-import { AddItemDialog } from "@/components/school/add-item-dialog";
+import { AddItemDialog, EditItemButton } from "@/components/school/add-item-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatShortDate, relativeStatus } from "@/lib/dates";
+import {
+  formatMinutes,
+  homeworkMinutes,
+  unitDeadline,
+  unitMinutes,
+  type Exam,
+  type ProgressUnit,
+} from "@/lib/types";
 import { useSchool } from "@/store/school-store";
 import { ArrowLeft, Trash2 } from "lucide-react";
 
@@ -124,11 +132,14 @@ export function CourseDetailView({
                 title={item.title}
                 date={item.dueDate}
                 note={item.note}
+                meta={`約 ${formatMinutes(homeworkMinutes(item))}${item.estimatedMinutes ? "" : "（預設）"}`}
+                partial={item.done ? undefined : item.progress}
                 done={item.done}
                 color={course.color}
                 readOnly={readOnly}
                 onToggle={() => toggleHomework(item.id)}
                 onRemove={() => removeHomework(item.id)}
+                edit={<EditItemButton kind="homework" courseId={course.id} id={item.id} />}
               />
             ))}
           </ul>
@@ -154,7 +165,10 @@ export function CourseDetailView({
                 readOnly={readOnly}
                 onToggle={() => toggleExam(item.id)}
                 onRemove={() => removeExam(item.id)}
-              />
+                edit={<EditItemButton kind="exam" courseId={course.id} id={item.id} />}
+              >
+                <ExamScope exam={item} units={units} color={course.color} />
+              </ItemRow>
             ))}
           </ul>
         )}
@@ -179,13 +193,8 @@ export function CourseDetailView({
                   readOnly={readOnly}
                   onToggle={() => toggleProgressUnit(unit.id)}
                 />
-                <span
-                  className={`min-w-0 flex-1 text-sm ${
-                    unit.completed ? "text-muted-foreground line-through" : "text-ink"
-                  }`}
-                >
-                  {unit.title}
-                </span>
+                <UnitText unit={unit} exams={exams} color={course.color} />
+                {!readOnly && <EditItemButton kind="progress" courseId={course.id} id={unit.id} />}
                 {!readOnly && (
                   <Button
                     variant="ghost"
@@ -238,20 +247,28 @@ function ItemRow({
   title,
   date,
   note,
+  meta,
+  partial,
   done,
   color,
   readOnly,
   onToggle,
   onRemove,
+  edit,
+  children,
 }: {
   title: string;
   date: string;
   note: string;
+  meta?: string;
+  partial?: number;
   done: boolean;
   color: string;
   readOnly: boolean;
   onToggle: () => void;
   onRemove: () => void;
+  edit?: ReactNode;
+  children?: ReactNode;
 }) {
   const status = relativeStatus(date, done);
   return (
@@ -279,9 +296,13 @@ function ItemRow({
         </div>
         <p className="mt-1 text-xs text-muted-foreground">
           {formatShortDate(date)}
+          {meta ? ` · ${meta}` : ""}
           {note ? ` · ${note}` : ""}
         </p>
+        {partial !== undefined && partial > 0 && <PartialBar pct={partial} color={color} />}
+        {children}
       </div>
+      {!readOnly && edit}
       {!readOnly && (
         <Button
           variant="ghost"
@@ -294,5 +315,99 @@ function ItemRow({
         </Button>
       )}
     </li>
+  );
+}
+
+function PartialBar({ pct, color }: { pct: number; color: string }) {
+  return (
+    <div className="mt-2 flex items-center gap-2">
+      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-200/70">
+        <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: color }} />
+      </div>
+      <span className="text-[11px] tabular-nums text-muted-foreground">{pct}%</span>
+    </div>
+  );
+}
+
+export function UnitText({
+  unit,
+  exams,
+  color,
+}: {
+  unit: ProgressUnit;
+  exams: Exam[];
+  color: string;
+}) {
+  const deadline = unitDeadline(unit, exams);
+  const status = deadline ? relativeStatus(deadline, unit.completed) : null;
+  const fromExam = deadline && !unit.dueDate;
+  return (
+    <div className="min-w-0 flex-1">
+      <span
+        className={`block text-sm ${unit.completed ? "text-muted-foreground line-through" : "text-ink"}`}
+      >
+        {unit.title}
+      </span>
+      <span className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-[11px] text-muted-foreground">
+        <span>約 {formatMinutes(unitMinutes(unit))}</span>
+        {deadline && (
+          <span className={status === "overdue" ? "text-rose-700" : undefined}>
+            · {fromExam ? "考前 " : "期限 "}
+            {formatShortDate(deadline)}
+          </span>
+        )}
+        {!unit.completed && (unit.progress ?? 0) > 0 && (
+          <span style={{ color }}>· 已讀 {unit.progress}%</span>
+        )}
+      </span>
+    </div>
+  );
+}
+
+export function ExamScope({
+  exam,
+  units,
+  color,
+}: {
+  exam: Exam;
+  units: ProgressUnit[];
+  color: string;
+}) {
+  const inScope = units.filter((u) => exam.scope?.includes(u.id));
+  if (inScope.length === 0) return null;
+  const total = inScope.reduce((a, u) => a + unitMinutes(u), 0);
+  const got = inScope.reduce(
+    (a, u) => a + unitMinutes(u) * (u.completed ? 1 : (u.progress ?? 0) / 100),
+    0,
+  );
+  const pct = total ? Math.round((got / total) * 100) : 0;
+  const doneCount = inScope.filter((u) => u.completed).length;
+  return (
+    <div className="mt-2 rounded-lg bg-white/80 p-2 ring-1 ring-border/60">
+      <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+        <span>
+          考試範圍 {doneCount}/{inScope.length} 單元
+          {total - got > 0 && `・還剩約 ${formatMinutes(Math.round(total - got))}`}
+        </span>
+        <span className="tabular-nums" style={{ color }}>
+          {pct}%
+        </span>
+      </div>
+      <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-100">
+        <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: color }} />
+      </div>
+      <div className="mt-1.5 flex flex-wrap gap-1">
+        {inScope.map((u) => (
+          <span
+            key={u.id}
+            className={`rounded px-1.5 py-0.5 text-[11px] ${
+              u.completed ? "bg-slate-100 text-muted-foreground line-through" : "bg-slate-100 text-ink"
+            }`}
+          >
+            {u.title}
+          </span>
+        ))}
+      </div>
+    </div>
   );
 }

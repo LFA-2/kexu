@@ -8,11 +8,12 @@ import { BattleshipView } from "@/components/games/battleship-view";
 import { BlottoView } from "@/components/games/blotto-view";
 import { GamesView, type GameId } from "@/components/games/games-view";
 import { PenaltyView } from "@/components/games/penalty-view";
+import { MeetingsView } from "@/components/meetings-view";
 import { MonthCalendar } from "@/components/month-calendar";
 import { formatShortDate, toDateKey } from "@/lib/dates";
 import { METRICS, sortSchedule } from "@/lib/life";
 import { usePeopleData, type PersonData } from "@/store/people-data";
-import { ChevronRight, Gamepad2 } from "lucide-react";
+import { ChevronRight, Gamepad2, NotebookPen } from "lucide-react";
 
 export type Person = { userId: string; name: string; color: string; isMe: boolean };
 
@@ -27,7 +28,7 @@ type AgendaItem = {
 };
 
 export function SharedView({ people }: { people: Person[] }) {
-  const [screen, setScreen] = useState<"home" | "games" | GameId>("home");
+  const [screen, setScreen] = useState<"home" | "games" | "meetings" | GameId>("home");
   const go = (next: typeof screen) => {
     setScreen(next);
     window.scrollTo({ top: 0 });
@@ -42,6 +43,8 @@ export function SharedView({ people }: { people: Person[] }) {
   switch (screen) {
     case "games":
       return <GamesView onBack={() => go("home")} onOpen={go} />;
+    case "meetings":
+      return <MeetingsView people={people} onBack={() => go("home")} />;
     case "ab":
       return <AbGameView {...gameProps} />;
     case "battleship":
@@ -51,10 +54,24 @@ export function SharedView({ people }: { people: Person[] }) {
     case "penalty":
       return <PenaltyView {...gameProps} />;
   }
-  return <SharedHome people={people} onOpenGames={() => go("games")} />;
+  return (
+    <SharedHome
+      people={people}
+      onOpenGames={() => go("games")}
+      onOpenMeetings={() => go("meetings")}
+    />
+  );
 }
 
-function SharedHome({ people, onOpenGames }: { people: Person[]; onOpenGames: () => void }) {
+function SharedHome({
+  people,
+  onOpenGames,
+  onOpenMeetings,
+}: {
+  people: Person[];
+  onOpenGames: () => void;
+  onOpenMeetings: () => void;
+}) {
   const { data, loaded } = usePeopleData(people.map((p) => p.userId));
   const today = toDateKey(new Date());
 
@@ -69,6 +86,21 @@ function SharedHome({ people, onOpenGames }: { people: Person[]; onOpenGames: ()
         <h2 className="font-display mt-1 text-2xl tracking-tight text-ink sm:text-3xl">共同</h2>
       </header>
 
+      <div className="grid gap-3 sm:grid-cols-2">
+      <button
+        type="button"
+        onClick={onOpenMeetings}
+        className="flex w-full items-center gap-3 rounded-2xl border border-border/70 bg-white p-4 text-left transition-colors hover:border-slate-300"
+      >
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-ink">
+          <NotebookPen className="size-5" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="font-display block text-lg text-ink">會議</span>
+          <span className="block truncate text-xs text-muted-foreground">議程、討論內容、決議與待辦</span>
+        </span>
+        <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+      </button>
       <button
         type="button"
         onClick={onOpenGames}
@@ -79,10 +111,11 @@ function SharedHome({ people, onOpenGames }: { people: Person[]; onOpenGames: ()
         </span>
         <span className="min-w-0 flex-1">
           <span className="font-display block text-lg text-ink">小遊戲</span>
-          <span className="block truncate text-xs text-muted-foreground">1A2B</span>
+          <span className="block truncate text-xs text-muted-foreground">1A2B、海戰棋、攻城戰、點球大戰</span>
         </span>
         <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
       </button>
+      </div>
 
       <Section title="今天的狀態">
         <div className="grid gap-3 sm:grid-cols-2">

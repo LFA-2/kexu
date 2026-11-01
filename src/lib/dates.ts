@@ -26,3 +26,8 @@ export function relativeStatus(dateKey: string, done: boolean) {
   if (isSameDay(d, addDays(today, 1))) return "tomorrow" as const;
   return "upcoming" as const;
 }
+
+export const WEEKDAYS = ["一", "二", "三", "四", "五", "六", "日"];
+
+/** 1 = Monday … 7 = Sunday */
+export const isoWeekday = (d: Date) => ((d.getDay() + 6) % 7) + 1;
