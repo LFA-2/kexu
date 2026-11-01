@@ -1,4 +1,4 @@
-import { differenceInCalendarDays, parseISO } from "date-fns";
+import { addDays, differenceInCalendarDays, parseISO } from "date-fns";
 import { formatShortDate, isoWeekday, toDateKey } from "@/lib/dates";
 import { routineMinutes, type Exercise, type FitnessState } from "@/lib/fitness";
 import {
@@ -150,11 +150,11 @@ export function openWork(date: string, school: SchoolState): Work[] {
   );
 }
 
-export function workItem(w: Work, minutes: number): PlanItem {
+export function workItem(w: Work, minutes: number, id = uid("pi")): PlanItem {
   const covers = minutes >= w.remaining - 0.5;
   const share = covers ? 100 - w.progress : Math.min(100 - w.progress, (minutes / w.estimate) * 100);
   return {
-    id: uid("pi"),
+    id,
     kind: w.kind,
     refId: w.refId,
     title: w.title,
@@ -166,6 +166,9 @@ export function workItem(w: Work, minutes: number): PlanItem {
     share: Math.round(share * 10) / 10,
   };
 }
+
+/** Stable ids for generated items, so re-planning keeps React keys and edits aligned. */
+const autoId = (kind: PlanItemKind, refId: string) => `a:${kind}:${refId}`;
 
 export function generatePlan(input: PlannerInput): DayPlan {
   const { date, school, life, fitness, exercises, actions, existing } = input;
@@ -181,7 +184,7 @@ export function generatePlan(input: PlannerInput): DayPlan {
   const fixed: PlanItem[] = [];
   const add = (kind: PlanItemKind, refId: string, title: string, detail: string, minutes: number, start = "") => {
     if (skip(kind, refId)) return;
-    fixed.push({ id: uid("pi"), kind, refId, title, detail, minutes, start, progress: 0 });
+    fixed.push({ id: autoId(kind, refId), kind, refId, title, detail, minutes, start, progress: 0 });
   };
 
   // Exams today
@@ -265,7 +268,7 @@ export function generatePlan(input: PlannerInput): DayPlan {
 
   const schoolItems = work.flatMap((w) => {
     const m = alloc.get(w.refId);
-    return m ? [workItem(w, m)] : [];
+    return m ? [workItem(w, m, autoId(w.kind, w.refId))] : [];
   });
 
   // Regenerating keeps what was already done today.
@@ -395,3 +398,63 @@ export const CATEGORY_LABEL = {
   todo: "待辦・會議",
   other: "其他",
 } as const;
+
+/**
+ * Plans every day from `from` through `to`, carrying work forward: each day
+ * assumes the previous days' targets were met, so work is spread rather than
+ * repeated. `stored` supplies the real plan for `from` (if any) and the hand
+ * edits (manual items, dismissed refs) of later days.
+ */
+export function planAhead(
+  base: Omit<PlannerInput, "date" | "existing">,
+  from: string,
+  to: string,
+  stored: Record<string, DayPlan>,
+): Record<string, DayPlan> {
+  const out: Record<string, DayPlan> = {};
+  let school: SchoolState = base.school;
+  const usedActions = new Set<string>();
+  for (let d = from; d <= to; d = toDateKey(addDays(parseISO(d), 1))) {
+    const plan =
+      d === from && stored[d]
+        ? stored[d]
+        : generatePlan({
+            ...base,
+            fromMinute: d === from ? base.fromMinute : undefined,
+            date: d,
+            school,
+            actions: base.actions.filter((a) => !usedActions.has(`${a.meetingId}:${a.action.id}`)),
+            existing: stored[d],
+          });
+    out[d] = plan;
+    school = assumeDone(school, plan);
+    for (const i of plan.items) if (i.kind === "action" && i.refId) usedActions.add(i.refId);
+  }
+  return out;
+}
+
+/** School state as if every homework/unit item in the plan reached its target. */
+function assumeDone(school: SchoolState, plan: DayPlan): SchoolState {
+  const target = new Map<string, number>();
+  for (const i of plan.items) {
+    if ((i.kind === "homework" || i.kind === "unit") && i.refId) {
+      target.set(i.refId, Math.min(100, (i.base ?? 0) + (i.share ?? 0)));
+    }
+  }
+  if (target.size === 0) return school;
+  return {
+    ...school,
+    homework: school.homework.map((h) => {
+      const t = target.get(h.id);
+      if (t === undefined) return h;
+      const p = Math.max(h.progress ?? 0, t);
+      return { ...h, progress: p, done: h.done || p >= 99.5 };
+    }),
+    progress: school.progress.map((u) => {
+      const t = target.get(u.id);
+      if (t === undefined) return u;
+      const p = Math.max(u.progress ?? 0, t);
+      return { ...u, progress: p, completed: u.completed || p >= 99.5 };
+    }),
+  };
+}

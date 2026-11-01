@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { addDays, format, parseISO, startOfWeek } from "date-fns";
+import { WeekView } from "@/components/today/week-view";
 import { zhTW } from "date-fns/locale";
 import { BarChart, ProgressRing, SegmentBar, SERIES } from "@/components/charts";
 import { MinutesField } from "@/components/minutes-field";
@@ -31,6 +32,7 @@ import {
   generatePlan,
   itemFraction,
   openWork,
+  planAhead,
   planCompletion,
   sortItems,
   sourceProgress,
@@ -94,6 +96,7 @@ export function TodayView({ me, isMine }: { me: string; isMine: boolean }) {
   const [editing, setEditing] = useState<PlanItem | null>(null);
   const [adding, setAdding] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [mode, setMode] = useState<"day" | "week">("day");
 
   const refreshMeetings = useCallback(async () => {
     if (!isMine) return;
@@ -126,8 +129,35 @@ export function TodayView({ me, isMine }: { me: string; isMine: boolean }) {
   );
   const src = useMemo(() => sources(date), [sources, date]);
 
-  const plan = life.plans?.[date];
-  const items = useMemo(() => sortItems(plan?.items ?? []), [plan]);
+  // Days after today are planned live (carrying work forward); only hand edits are stored.
+  const weekStartKey = toDateKey(startOfWeek(parseISO(date), { weekStartsOn: 1 }));
+  const weekEndKey = toDateKey(addDays(parseISO(weekStartKey), 6));
+  const aheadTo = weekEndKey > date ? weekEndKey : date;
+  const [nowMinute] = useState(() => {
+    const now = new Date();
+    return Math.ceil((now.getHours() * 60 + now.getMinutes()) / 15) * 15;
+  });
+  const ahead: Record<string, DayPlan> =
+    aheadTo <= todayKey || !loaded || meetings === null
+      ? {}
+      : planAhead(
+      {
+        school,
+        life,
+        fitness,
+        exercises: fitness.allExercises,
+        actions: actions.filter((a) => !a.action.done),
+        fromMinute: nowMinute,
+      },
+      todayKey,
+      aheadTo,
+        life.plans ?? {},
+      );
+  const planFor = (d: string): DayPlan | undefined =>
+    d > todayKey || (d === todayKey && !life.plans?.[d]) ? ahead[d] : life.plans?.[d];
+  const isFuture = date > todayKey;
+  const plan = planFor(date);
+  const items = sortItems(plan?.items ?? []);
   const frac = useCallback((i: PlanItem) => itemFraction(i, src), [src]);
 
   const build = useCallback(
@@ -151,15 +181,15 @@ export function TodayView({ me, isMine }: { me: string; isMine: boolean }) {
   // First visit to a day (today or later): make a plan automatically.
   const autoDone = useRef(new Set<string>());
   useEffect(() => {
-    if (readOnly || !loaded || meetings === null || plan || date < todayKey) return;
+    if (readOnly || !loaded || meetings === null || life.plans?.[date] || date !== todayKey) return;
     if (autoDone.current.has(date)) return;
     autoDone.current.add(date);
     life.updatePlan(date, (prev) => prev ?? build());
-  }, [readOnly, loaded, meetings, plan, date, todayKey, life, build]);
+  }, [readOnly, loaded, meetings, date, todayKey, life, build]);
 
   // Keep the stored snapshot in line with the sources, so past days chart correctly.
   useEffect(() => {
-    if (readOnly || !loaded || !plan || date > todayKey) return;
+    if (readOnly || !loaded || !plan || !life.plans?.[date] || date > todayKey) return;
     const stale = plan.items.some((i) => Math.abs(Math.round(frac(i) * 100) - i.progress) > 0);
     if (!stale) return;
     life.updatePlan(date, (prev) =>
@@ -177,18 +207,18 @@ export function TodayView({ me, isMine }: { me: string; isMine: boolean }) {
   const doneMin = items.reduce((a, i) => a + i.minutes * frac(i), 0);
   const doneCount = items.filter((i) => frac(i) >= 1).length;
 
-  const week = useMemo(() => {
+  const week = (() => {
     const start = startOfWeek(parseISO(date), { weekStartsOn: 1 });
     return Array.from({ length: 7 }, (_, k) => {
       const d = toDateKey(addDays(start, k));
-      const p = life.plans?.[d];
+      const p = planFor(d);
       const f = d === date || d === todayKey ? (i: PlanItem) => itemFraction(i, sources(d)) : (i: PlanItem) => i.progress / 100;
       const pct = p && d <= todayKey ? planCompletion(p.items, f) : null;
       const minutes = p?.items.reduce((a, i) => a + i.minutes, 0) ?? 0;
       const done = p?.items.reduce((a, i) => a + i.minutes * f(i), 0) ?? 0;
       return { key: d, label: format(parseISO(d), "EEEEE", { locale: zhTW }), pct, minutes, done, current: d === date };
     });
-  }, [date, life.plans, todayKey, sources]);
+  })();
   const weekCounted = week.filter((w) => w.pct !== null);
   const weekMinutes = weekCounted.reduce((a, w) => a + w.minutes, 0);
   const weekPct = weekMinutes
@@ -197,7 +227,7 @@ export function TodayView({ me, isMine }: { me: string; isMine: boolean }) {
       ? weekCounted.reduce((a, w) => a + (w.pct ?? 0), 0) / weekCounted.length
       : 0;
 
-  const byCategory = useMemo(() => {
+  const byCategory = (() => {
     const sum: Record<string, number> = {};
     for (const i of items) {
       const c = CATEGORY_OF[i.kind];
@@ -209,7 +239,7 @@ export function TodayView({ me, isMine }: { me: string; isMine: boolean }) {
       value: sum[k] ?? 0,
       color: CATEGORY_COLOR[k],
     }));
-  }, [items]);
+  })();
 
   // Classes on this day, shown in the timeline (not part of the % ).
   const classes = useMemo(() => {
@@ -270,18 +300,16 @@ export function TodayView({ me, isMine }: { me: string; isMine: boolean }) {
   }
 
   function removeItem(item: PlanItem) {
-    life.updatePlan(date, (prev) =>
-      prev
-        ? {
-            ...prev,
-            items: prev.items.filter((i) => i.id !== item.id),
-            dismissed:
-              item.refId && !item.manual
-                ? [...new Set([...(prev.dismissed ?? []), `${item.kind}:${item.refId}`])]
-                : prev.dismissed,
-          }
-        : prev,
-    );
+    life.updatePlan(date, (stored) => {
+      const prev = stored ?? { generatedAt: new Date().toISOString(), items: [] };
+      return {
+        ...prev,
+        items: prev.items.filter((i) => i.id !== item.id),
+        dismissed: item.refId
+          ? [...new Set([...(prev.dismissed ?? []), `${item.kind}:${item.refId}`])]
+          : prev.dismissed,
+      };
+    });
   }
 
   function saveItem(item: PlanItem) {
@@ -301,18 +329,60 @@ export function TodayView({ me, isMine }: { me: string; isMine: boolean }) {
   const dateLabel = format(parseISO(date), "M 月 d 日 EEEE", { locale: zhTW });
   const isPast = date < todayKey;
 
+  const modeToggle = (
+    <div className="flex rounded-xl border border-border/80 bg-white p-0.5 shadow-sm">
+      {(["day", "week"] as const).map((m) => (
+        <button
+          key={m}
+          type="button"
+          onClick={() => setMode(m)}
+          className={`rounded-lg px-3 py-1 text-sm font-medium ${mode === m ? "bg-ink text-white" : "text-muted-foreground hover:text-ink"}`}
+          aria-pressed={mode === m}
+        >
+          {m === "day" ? "今日" : "本週"}
+        </button>
+      ))}
+    </div>
+  );
+
+  if (mode === "week") {
+    const days = Array.from({ length: 7 }, (_, k) => toDateKey(addDays(parseISO(weekStartKey), k)));
+    return (
+      <WeekView
+        days={days}
+        todayKey={todayKey}
+        readOnly={readOnly}
+        planFor={planFor}
+        sources={sources}
+        toggle={modeToggle}
+        onShiftWeek={(n) => setDate(toDateKey(addDays(parseISO(date), n * 7)))}
+        onThisWeek={() => setDate(todayKey)}
+        onOpenDay={(d) => {
+          setDate(d);
+          setMode("day");
+          window.scrollTo({ top: 0 });
+        }}
+      />
+    );
+  }
+
   return (
     <div className="space-y-6">
       <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-sm text-muted-foreground">
-            {date === todayKey ? "依截止日、預估時間和課表空檔自動排好，可以自己再調整" : isPast ? "回顧這天的完成狀況" : "預先看看這天的安排"}
+            {date === todayKey
+              ? "依截止日、預估時間和課表空檔自動排好，可以自己再調整"
+              : isPast
+                ? "回顧這天的完成狀況"
+                : "預先排好的安排，會隨你的進度自動更新"}
           </p>
           <h2 className="font-display mt-1 text-2xl tracking-tight text-ink sm:text-3xl">
             {date === todayKey ? "今日" : date === toDateKey(addDays(new Date(), 1)) ? "明天" : dateLabel}
           </h2>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {modeToggle}
           <div className="flex items-center rounded-xl border border-border/80 bg-white p-0.5 shadow-sm">
             <Button variant="ghost" size="icon-sm" onClick={() => setDate(toDateKey(addDays(parseISO(date), -1)))} aria-label="前一天">
               <ChevronLeft />
@@ -328,7 +398,7 @@ export function TodayView({ me, isMine }: { me: string; isMine: boolean }) {
               <ChevronRight />
             </Button>
           </div>
-          {!readOnly && !isPast && (
+          {!readOnly && date === todayKey && (
             <Button variant="outline" size="sm" className="gap-1" onClick={regenerate}>
               <RefreshCw className="size-3.5" />
               重新排
@@ -395,7 +465,7 @@ export function TodayView({ me, isMine }: { me: string; isMine: boolean }) {
         </div>
         {!plan ? (
           <p className="rounded-2xl border border-dashed border-border bg-white px-4 py-10 text-center text-sm text-muted-foreground">
-            {readOnly ? "這天沒有計畫" : isPast ? "這天沒有留下計畫" : "正在排…"}
+            {readOnly || isPast ? "這天沒有計畫" : "正在排…"}
           </p>
         ) : items.length === 0 && classes.length === 0 ? (
           <p className="rounded-2xl border border-dashed border-border bg-white px-4 py-10 text-center text-sm text-muted-foreground">
@@ -406,6 +476,7 @@ export function TodayView({ me, isMine }: { me: string; isMine: boolean }) {
             items={items}
             classes={classes}
             readOnly={readOnly}
+            future={isFuture}
             frac={frac}
             src={src}
             onProgress={setProgress}
@@ -459,6 +530,7 @@ function Timeline({
   items,
   classes,
   readOnly,
+  future,
   frac,
   src,
   onProgress,
@@ -467,6 +539,7 @@ function Timeline({
   items: PlanItem[];
   classes: ClassRow[];
   readOnly: boolean;
+  future: boolean;
   frac: (i: PlanItem) => number;
   src: LiveSources;
   onProgress: (i: PlanItem, pct: number) => void;
@@ -498,6 +571,7 @@ function Timeline({
             key={r.item.id}
             item={r.item}
             readOnly={readOnly}
+            future={future}
             fraction={frac(r.item)}
             overall={sourceProgress(r.item, src)}
             workoutLogged={r.item.kind === "workout" && !!src.fitness?.sessions.some((s) => s.date === src.date)}
@@ -513,6 +587,7 @@ function Timeline({
 function ItemRow({
   item,
   readOnly,
+  future,
   fraction,
   overall,
   workoutLogged,
@@ -521,6 +596,7 @@ function ItemRow({
 }: {
   item: PlanItem;
   readOnly: boolean;
+  future: boolean;
   fraction: number;
   /** overall % of the source for school work, else null */
   overall: number | null;
@@ -537,7 +613,7 @@ function ItemRow({
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const shown = draft ?? value;
   const done = fraction >= 1;
-  const locked = readOnly || (item.kind === "workout" && workoutLogged);
+  const locked = readOnly || future || (item.kind === "workout" && workoutLogged);
 
   function change(v: number) {
     setDraft(v);
@@ -612,7 +688,7 @@ function ItemRow({
           </div>
           {isWork ? (
             <p className="mt-1 text-[11px] text-muted-foreground">
-              整體進度・今天目標 {target}%{target === 100 ? "（做完）" : ""}
+              整體進度・{future ? "這天目標" : "今天目標"} {target}%{target === 100 ? "（做完）" : ""}
               {fraction >= 1 && " ✓"}
             </p>
           ) : item.kind === "workout" ? (
@@ -814,6 +890,7 @@ function SettingsDialog({
   onSave: (s: PlanSettings) => void;
 }) {
   const [s, setS] = useState(value);
+  const [budget, setBudget] = useState<number | null>(value.studyBudget);
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-md">
@@ -835,8 +912,9 @@ function SettingsDialog({
           <MinutesField
             id="ps-budget"
             label="每天讀書／寫作業最多"
-            value={s.studyBudget}
-            onChange={(v) => setS({ ...s, studyBudget: v ?? DEFAULT_PLAN_SETTINGS.studyBudget })}
+            value={budget}
+            onChange={setBudget}
+            placeholder={`例如 ${DEFAULT_PLAN_SETTINGS.studyBudget}`}
             presets={[120, 180, 240, 300, 360, 480]}
           />
           <p className="text-xs text-muted-foreground">
@@ -848,8 +926,8 @@ function SettingsDialog({
             取消
           </Button>
           <Button
-            disabled={!s.dayStart || !s.dayEnd || toMinutes(s.dayEnd) <= toMinutes(s.dayStart)}
-            onClick={() => onSave(s)}
+            disabled={!budget || !s.dayStart || !s.dayEnd || toMinutes(s.dayEnd) <= toMinutes(s.dayStart)}
+            onClick={() => budget && onSave({ ...s, studyBudget: budget })}
           >
             儲存
           </Button>

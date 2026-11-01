@@ -70,6 +70,8 @@ export type BarDatum = {
   value: number | null;
   /** Tooltip text; defaults to the formatted value */
   tip?: string;
+  /** When set, a light bar of this size is drawn behind the value (done out of total). */
+  total?: number | null;
   highlight?: boolean;
 };
 
@@ -96,7 +98,7 @@ export function BarChart({
   const innerH = H - top;
   const slot = W / Math.max(1, data.length);
   const barW = Math.min(44, slot * 0.6);
-  const peak = max ?? Math.max(1, ...data.map((d) => d.value ?? 0));
+  const peak = max ?? Math.max(1, ...data.map((d) => Math.max(d.value ?? 0, d.total ?? 0)));
 
   return (
     <div className="relative">
@@ -119,9 +121,17 @@ export function BarChart({
             d.value === null ? 0 : Math.max(d.value > 0 ? 3 : 1.5, (d.value / peak) * innerH);
           const y = H - h;
           const dim = hover !== null && hover !== i;
+          const th = d.total ? Math.max(3, (d.total / peak) * innerH) : 0;
           return (
             <g key={d.key}>
-              {d.value !== null && (
+              {th > 0 && (
+                <path
+                  d={roundedTopBar(cx - barW / 2, H - th, barW, th, Math.min(4, th))}
+                  fill={color}
+                  opacity={dim ? 0.08 : 0.2}
+                />
+              )}
+              {d.value !== null && (d.value > 0 || !d.total) && (
                 <path
                   d={roundedTopBar(cx - barW / 2, y, barW, h, Math.min(4, h))}
                   fill={color}
