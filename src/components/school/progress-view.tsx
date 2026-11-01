@@ -20,7 +20,7 @@ export function ProgressView() {
 
   if (courses.length === 0) {
     return (
-      <div className="rounded-2xl border border-dashed border-border bg-white px-6 py-16 text-center text-sm text-muted-foreground">
+      <div className="rounded-2xl border border-dashed border-border bg-card px-6 py-16 text-center text-sm text-muted-foreground">
         {readOnly ? "還沒有任何課程。" : "請先到「課程」新增課程，再於課程內加入讀書單元。"}
       </div>
     );
@@ -50,7 +50,7 @@ export function ProgressView() {
           return (
             <section
               key={course.id}
-              className="animate-fade-up rounded-2xl border border-border/70 bg-white p-5"
+              className="animate-fade-up rounded-2xl border border-border/70 bg-card p-5"
               style={{ animationDelay: `${index * 45}ms` }}
             >
               <div className="flex flex-wrap items-end justify-between gap-3">
@@ -76,7 +76,7 @@ export function ProgressView() {
               </div>
 
               <div
-                className="mt-4 h-3 overflow-hidden rounded-full bg-slate-100"
+                className="mt-4 h-3 overflow-hidden rounded-full bg-wash"
                 role="progressbar"
                 aria-valuenow={pct}
                 aria-valuemin={0}
@@ -98,7 +98,7 @@ export function ProgressView() {
                   {units.map((unit) => (
                     <li
                       key={unit.id}
-                      className="flex items-center gap-3 rounded-xl border border-border/60 bg-slate-50/60 px-3 py-2.5"
+                      className="flex items-center gap-3 rounded-xl border border-border/60 bg-soft/60 px-3 py-2.5"
                     >
                       <CheckButton
                         done={unit.completed}

@@ -173,7 +173,7 @@ function DirectionColumn({
   onChange: (next: (Direction | null)[]) => void;
 }) {
   return (
-    <div className="rounded-xl bg-slate-50 p-3">
+    <div className="rounded-xl bg-soft p-3">
       <p className="text-xs text-muted-foreground">{caption}</p>
       <ul className="mt-2 space-y-1.5">
         {values.map((value, i) => (
@@ -182,7 +182,7 @@ function DirectionColumn({
             <div
               role="radiogroup"
               aria-label={`${caption}第 ${i + 1} 球`}
-              className="flex flex-1 rounded-lg border border-border/80 bg-white p-0.5"
+              className="flex flex-1 rounded-lg border border-border/80 bg-card p-0.5"
             >
               {DIRECTIONS.map((d) => (
                 <button
@@ -192,7 +192,7 @@ function DirectionColumn({
                   aria-checked={value === d}
                   onClick={() => onChange(values.map((v, j) => (j === i ? d : v)))}
                   className={`flex-1 rounded-md py-1 text-sm transition-colors ${
-                    value === d ? "bg-ink text-white" : "text-muted-foreground hover:text-ink"
+                    value === d ? "bg-chip text-chip-foreground" : "text-muted-foreground hover:text-ink"
                   }`}
                 >
                   {DIRECTION_LABEL[d]}
@@ -281,7 +281,7 @@ function PenaltyResult({
         {kicks.map((_, i) => (
           <span
             key={i}
-            className={`h-1.5 flex-1 rounded-full ${i < shown ? "bg-ink" : i === cursor ? "bg-teal-600" : "bg-slate-200"}`}
+            className={`h-1.5 flex-1 rounded-full ${i < shown ? "bg-chip" : i === cursor ? "bg-primary" : "bg-muted"}`}
           />
         ))}
       </div>
@@ -400,7 +400,7 @@ function KickStage({
         </div>
       </div>
       <figcaption className="pk-call">
-        <span className={goal ? "text-teal-800" : "text-ink"}>{goal ? "進球" : "被撲出"}</span>
+        <span className={goal ? "text-primary" : "text-ink"}>{goal ? "進球" : "被撲出"}</span>
         <span className="text-muted-foreground">
           {shooter} 射{DIRECTION_LABEL[shot]}・{keeper} 撲{DIRECTION_LABEL[dive]}
         </span>

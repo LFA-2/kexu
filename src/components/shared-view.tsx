@@ -90,9 +90,9 @@ function SharedHome({
       <button
         type="button"
         onClick={onOpenMeetings}
-        className="flex w-full items-center gap-3 rounded-2xl border border-border/70 bg-white p-4 text-left transition-colors hover:border-slate-300"
+        className="flex w-full items-center gap-3 rounded-2xl border border-border/70 bg-card p-4 text-left transition-colors hover:border-slate-300"
       >
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-ink">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-wash text-ink">
           <NotebookPen className="size-5" />
         </span>
         <span className="min-w-0 flex-1">
@@ -104,9 +104,9 @@ function SharedHome({
       <button
         type="button"
         onClick={onOpenGames}
-        className="flex w-full items-center gap-3 rounded-2xl border border-border/70 bg-white p-4 text-left transition-colors hover:border-slate-300"
+        className="flex w-full items-center gap-3 rounded-2xl border border-border/70 bg-card p-4 text-left transition-colors hover:border-slate-300"
       >
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-ink">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-wash text-ink">
           <Gamepad2 className="size-5" />
         </span>
         <span className="min-w-0 flex-1">
@@ -148,7 +148,7 @@ function SharedHome({
             return (
               <div
                 key={p.userId}
-                className="rounded-2xl border border-border/70 bg-white p-4"
+                className="rounded-2xl border border-border/70 bg-card p-4"
                 style={{ borderLeft: `4px solid ${p.color}` }}
               >
                 <PersonLabel person={p} />
@@ -204,7 +204,7 @@ function DayPlans({
   const range = timelineRange(plans);
 
   return (
-    <div className="rounded-2xl border border-border/70 bg-white p-4 sm:p-5">
+    <div className="rounded-2xl border border-border/70 bg-card p-4 sm:p-5">
       <h4 className="mb-3 text-sm font-medium text-ink">
         {label}
         <span className="ml-1.5 text-xs font-normal text-muted-foreground">
@@ -239,7 +239,7 @@ function TodayMetrics({
 }) {
   const day = data?.life?.metrics[today] ?? {};
   return (
-    <div className="rounded-2xl border border-border/70 bg-white p-4">
+    <div className="rounded-2xl border border-border/70 bg-card p-4">
       <PersonLabel person={person} />
       <div className="mt-3 space-y-2">
         {METRICS.map((m) => {
@@ -247,7 +247,7 @@ function TodayMetrics({
           return (
             <div key={m.key} className="flex items-center gap-3 text-sm">
               <span className="w-16 shrink-0 text-xs text-muted-foreground">{m.label}</span>
-              <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100">
+              <div className="h-2 flex-1 overflow-hidden rounded-full bg-wash">
                 {value !== undefined && (
                   <div
                     className="h-full rounded-full"
@@ -378,7 +378,7 @@ function Agenda({
 
   if (groups.length === 0) {
     return (
-      <p className="rounded-2xl border border-dashed border-border bg-white px-4 py-10 text-center text-sm text-muted-foreground">
+      <p className="rounded-2xl border border-dashed border-border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
         接下來沒有待做事項、作業或考試
       </p>
     );
@@ -389,7 +389,7 @@ function Agenda({
       {groups.map((group) => (
         <div key={group.key}>
           <h4
-            className={`mb-2 text-sm font-medium ${group.overdue ? "text-rose-700" : "text-ink"}`}
+            className={`mb-2 text-sm font-medium ${group.overdue ? "text-destructive" : "text-ink"}`}
           >
             {group.label}
           </h4>
@@ -397,7 +397,7 @@ function Agenda({
             {group.items.map((item) => (
               <li
                 key={`${item.person.userId}-${item.id}`}
-                className="flex items-center gap-3 rounded-xl border border-border/70 bg-white px-3 py-2.5"
+                className="flex items-center gap-3 rounded-xl border border-border/70 bg-card px-3 py-2.5"
               >
                 <span
                   className="h-8 w-1 shrink-0 rounded-full"

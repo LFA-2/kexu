@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { describeError } from "@/lib/supabase";
 import { useAuth } from "@/store/auth-store";
 import { useLinks, type LinkedPerson } from "@/store/links-store";
+import { ThemePicker } from "@/components/theme-picker";
 import { ArrowLeft, Copy, LogOut } from "lucide-react";
 
 const REQUEST_ERRORS = {
@@ -73,6 +74,10 @@ export function AccountView({ onBack }: { onBack: () => void }) {
         <p className="mt-1 text-sm text-muted-foreground">{session?.user.email}</p>
       </header>
 
+      <Section title="主題" hint="只存在這台裝置。極致黑和白參考 LINE 的主題，其餘是顏色。">
+        <ThemePicker />
+      </Section>
+
       <Section title="顯示名稱">
         <form onSubmit={saveName} className="flex gap-2">
           <Input value={nameValue} onChange={(e) => setName(e.target.value)} maxLength={40} />
@@ -112,7 +117,7 @@ export function AccountView({ onBack }: { onBack: () => void }) {
           </Button>
         </form>
         {message && (
-          <p className={`mt-2 text-sm ${message.tone === "ok" ? "text-teal-800" : "text-destructive"}`}>
+          <p className={`mt-2 text-sm ${message.tone === "ok" ? "text-primary" : "text-destructive"}`}>
             {message.text}
           </p>
         )}
@@ -191,7 +196,7 @@ function Section({
   children: ReactNode;
 }) {
   return (
-    <section className="rounded-2xl border border-border/70 bg-white p-4 sm:p-5">
+    <section className="rounded-2xl border border-border/70 bg-card p-4 sm:p-5">
       <h3 className="font-display text-lg text-ink">{title}</h3>
       {hint && <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{hint}</p>}
       <div className="mt-3">{children}</div>
@@ -211,7 +216,7 @@ function PeopleList({
       {people.map((p) => (
         <li
           key={p.linkId}
-          className="flex items-center gap-3 rounded-xl border border-border/60 bg-slate-50/60 px-3 py-2"
+          className="flex items-center gap-3 rounded-xl border border-border/60 bg-soft/60 px-3 py-2"
         >
           <span className="flex size-8 items-center justify-center rounded-full bg-teal-700 text-sm font-medium text-white">
             {p.name.slice(0, 1)}

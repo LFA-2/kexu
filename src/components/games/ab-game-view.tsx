@@ -76,8 +76,8 @@ export function AbGameView({
                   onClick={() => setOpponentId(p.userId)}
                   className={`rounded-full border px-3 py-1 text-sm transition-colors ${
                     p.userId === opponent?.userId
-                      ? "border-ink bg-ink text-white"
-                      : "border-border/80 bg-white text-muted-foreground hover:text-ink"
+                      ? "border-chip bg-chip text-chip-foreground"
+                      : "border-border/80 bg-card text-muted-foreground hover:text-ink"
                   }`}
                 >
                   {p.name}
@@ -121,7 +121,7 @@ export function AbGameView({
 
 function Card({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section className="rounded-2xl border border-border/70 bg-white p-4 sm:p-5">
+    <section className="rounded-2xl border border-border/70 bg-card p-4 sm:p-5">
       <h3 className="font-display text-lg text-ink">{title}</h3>
       <div className="mt-3">{children}</div>
     </section>
@@ -135,7 +135,7 @@ function DigitBoxes({ value, muted = false }: { value: string; muted?: boolean }
         <span
           key={i}
           className={`flex size-10 items-center justify-center rounded-lg font-display text-xl tabular-nums ${
-            muted ? "bg-slate-100 text-ink" : "bg-ink text-white"
+            muted ? "bg-wash text-ink" : "bg-chip text-chip-foreground"
           }`}
         >
           {d}
@@ -238,7 +238,7 @@ function GuessList({ guesses }: { guesses: Guess[] }) {
             {g.guess}
           </span>
           <span className="ml-auto text-sm font-medium tabular-nums">
-            <span className="text-teal-700">{g.a}A</span>
+            <span className="text-primary">{g.a}A</span>
             <span className="text-amber-700">{g.b}B</span>
           </span>
         </li>
@@ -306,7 +306,7 @@ function GuessCard({
           <GuessList guesses={guesses} />
 
           {solved ? (
-            <p className="rounded-xl bg-teal-50 px-4 py-3 text-sm font-medium text-teal-800">
+            <p className="rounded-xl bg-accent px-4 py-3 text-sm font-medium text-primary">
               猜中了！共 {guesses.length} 次
             </p>
           ) : (

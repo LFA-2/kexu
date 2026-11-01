@@ -80,7 +80,7 @@ export function HabitsView({ color, onBack }: { color: string; onBack: () => voi
       </header>
 
       {habits.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-border bg-white px-6 py-14 text-center">
+        <div className="rounded-2xl border border-dashed border-border bg-card px-6 py-14 text-center">
           <p className="font-display text-xl text-ink">還沒有習慣</p>
           <p className="mt-2 text-sm text-muted-foreground">
             例如：週二、週五倒垃圾；週日洗衣服。
@@ -88,7 +88,7 @@ export function HabitsView({ color, onBack }: { color: string; onBack: () => voi
         </div>
       ) : (
         <>
-          <section className="rounded-2xl border border-border/70 bg-white p-4 sm:p-5">
+          <section className="rounded-2xl border border-border/70 bg-card p-4 sm:p-5">
             <div className="mb-3 flex items-baseline justify-between gap-2">
               <h3 className="font-display text-lg text-ink">今天（星期{WEEKDAYS[todayWd - 1]}）</h3>
               <span className="text-xs text-muted-foreground">
@@ -106,7 +106,7 @@ export function HabitsView({ color, onBack }: { color: string; onBack: () => voi
                   return (
                     <li
                       key={h.id}
-                      className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 ${done ? "border-border/50 bg-slate-50/60" : "border-border/70"}`}
+                      className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 ${done ? "border-border/50 bg-soft/60" : "border-border/70"}`}
                     >
                       <CheckButton
                         done={done}
@@ -138,7 +138,7 @@ export function HabitsView({ color, onBack }: { color: string; onBack: () => voi
             )}
           </section>
 
-          <section className="overflow-x-auto rounded-2xl border border-border/70 bg-white p-4 sm:p-5">
+          <section className="overflow-x-auto rounded-2xl border border-border/70 bg-card p-4 sm:p-5">
             <h3 className="font-display mb-3 text-lg text-ink">每週安排</h3>
             <table className="w-full min-w-[30rem] text-sm">
               <thead>
@@ -190,7 +190,7 @@ export function HabitsView({ color, onBack }: { color: string; onBack: () => voi
                               {done && <Check className="size-3.5" />}
                             </button>
                           ) : (
-                            <span className="text-slate-300">·</span>
+                            <span className="text-muted-foreground/40">·</span>
                           )}
                         </td>
                       );
@@ -263,7 +263,7 @@ function HabitDialog({ habit, onClose }: { habit: Habit | null; onClose: () => v
                     setIcon(p.icon);
                     setMinutes(p.minutes);
                   }}
-                  className="rounded-full border border-border/80 bg-white px-2.5 py-1 text-xs text-muted-foreground hover:text-ink"
+                  className="rounded-full border border-border/80 bg-card px-2.5 py-1 text-xs text-muted-foreground hover:text-ink"
                 >
                   {p.icon} {p.title}
                 </button>
@@ -289,7 +289,7 @@ function HabitDialog({ habit, onClose }: { habit: Habit | null; onClose: () => v
                   type="button"
                   onClick={() => setIcon(i)}
                   className={`flex size-9 items-center justify-center rounded-lg border text-lg ${
-                    icon === i ? "border-ink bg-slate-100" : "border-transparent hover:bg-slate-50"
+                    icon === i ? "border-chip bg-wash" : "border-transparent hover:bg-soft"
                   }`}
                   aria-pressed={icon === i}
                 >
@@ -324,7 +324,7 @@ function HabitDialog({ habit, onClose }: { habit: Habit | null; onClose: () => v
                       setDays((ds) => (on ? ds.filter((x) => x !== d) : [...ds, d].sort()))
                     }
                     className={`flex-1 rounded-lg border py-1.5 text-sm transition-colors ${
-                      on ? "border-ink bg-ink text-white" : "border-border bg-white text-muted-foreground"
+                      on ? "border-chip bg-chip text-chip-foreground" : "border-border bg-card text-muted-foreground"
                     }`}
                     aria-pressed={on}
                   >

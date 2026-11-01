@@ -37,14 +37,14 @@ export function ScheduleView({ color, onBack }: { color: string; onBack: () => v
         </h2>
       </header>
 
-      <div className="flex w-fit rounded-xl border border-border/80 bg-white p-1 shadow-sm">
+      <div className="flex w-fit rounded-xl border border-border/80 bg-card p-1 shadow-sm">
         {(["today", "tomorrow"] as const).map((d) => (
           <button
             key={d}
             type="button"
             onClick={() => setDay(d)}
             className={`rounded-lg px-4 py-1.5 text-sm font-medium transition-all ${
-              day === d ? "bg-ink text-white shadow-sm" : "text-muted-foreground hover:text-ink"
+              day === d ? "bg-chip text-chip-foreground shadow-sm" : "text-muted-foreground hover:text-ink"
             }`}
           >
             {d === "today" ? "今天" : "明天"}
@@ -55,7 +55,7 @@ export function ScheduleView({ color, onBack }: { color: string; onBack: () => v
         ))}
       </div>
 
-      <section className="rounded-2xl border border-border/70 bg-white p-4 sm:p-5">
+      <section className="rounded-2xl border border-border/70 bg-card p-4 sm:p-5">
         {items.length === 0 ? (
           <p className="mb-3 text-sm text-muted-foreground">還沒有行程</p>
         ) : null}
@@ -71,10 +71,10 @@ export function ScheduleView({ color, onBack }: { color: string; onBack: () => v
           {items.map((item) => (
             <li
               key={item.id}
-              className="flex items-center gap-3 rounded-xl border border-border/70 bg-white px-3 py-2.5"
+              className="flex items-center gap-3 rounded-xl border border-border/70 bg-card px-3 py-2.5"
             >
               <span
-                className={`shrink-0 ${item.kind === "span" ? "h-2.5 w-5 rounded-full" : "size-3 rounded-full border-[3px] bg-white"}`}
+                className={`shrink-0 ${item.kind === "span" ? "h-2.5 w-5 rounded-full" : "size-3 rounded-full border-[3px] bg-card"}`}
                 style={
                   item.kind === "span" ? { backgroundColor: color } : { borderColor: color }
                 }
@@ -123,7 +123,7 @@ function AddForm({ onAdd }: { onAdd: (item: Omit<ScheduleItem, "id">) => void })
   return (
     <form
       onSubmit={submit}
-      className="space-y-4 rounded-2xl border border-border/70 bg-white p-4 sm:p-5"
+      className="space-y-4 rounded-2xl border border-border/70 bg-card p-4 sm:p-5"
     >
       <div className="flex items-center justify-between gap-3">
         <h3 className="font-display text-lg text-ink">新增</h3>
@@ -134,7 +134,7 @@ function AddForm({ onAdd }: { onAdd: (item: Omit<ScheduleItem, "id">) => void })
               type="button"
               onClick={() => setKind(k)}
               className={`rounded-md px-3 py-1 text-sm transition-colors ${
-                kind === k ? "bg-ink text-white" : "text-muted-foreground hover:text-ink"
+                kind === k ? "bg-chip text-chip-foreground" : "text-muted-foreground hover:text-ink"
               }`}
             >
               {k === "point" ? "時間點" : "時間段"}
@@ -153,7 +153,7 @@ function AddForm({ onAdd }: { onAdd: (item: Omit<ScheduleItem, "id">) => void })
               onClick={() => setLabel(p)}
               className={`rounded-full border px-3 py-1 text-sm transition-colors ${
                 label === p
-                  ? "border-ink bg-ink text-white"
+                  ? "border-chip bg-chip text-chip-foreground"
                   : "border-border/80 text-muted-foreground hover:text-ink"
               }`}
             >

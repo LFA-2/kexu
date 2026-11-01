@@ -44,7 +44,7 @@ export function GameCard({
   children: ReactNode;
 }) {
   return (
-    <section className="rounded-2xl border border-border/70 bg-white p-4 sm:p-5">
+    <section className="rounded-2xl border border-border/70 bg-card p-4 sm:p-5">
       <div className="flex items-center justify-between gap-3">
         <h3 className="font-display text-lg text-ink">{title}</h3>
         {action}
@@ -73,8 +73,8 @@ export function OpponentPicker({
           onClick={() => onChange(p.userId)}
           className={`rounded-full border px-3 py-1 text-sm transition-colors ${
             p.userId === value
-              ? "border-ink bg-ink text-white"
-              : "border-border/80 bg-white text-muted-foreground hover:text-ink"
+              ? "border-chip bg-chip text-chip-foreground"
+              : "border-border/80 bg-card text-muted-foreground hover:text-ink"
           }`}
         >
           {p.name}

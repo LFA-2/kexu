@@ -19,7 +19,7 @@ export function MetricsPanel({ onOpenMetric }: { onOpenMetric: (key: MetricKey) 
 
   return (
     <div className="space-y-3">
-      <section className="rounded-2xl border border-border/70 bg-white p-4 sm:p-5">
+      <section className="rounded-2xl border border-border/70 bg-card p-4 sm:p-5">
         <div className="mb-4 flex items-center justify-between gap-3">
           <div>
             <h3 className="font-display text-lg text-ink">每日狀態</h3>
@@ -72,7 +72,7 @@ export function MetricsPanel({ onOpenMetric }: { onOpenMetric: (key: MetricKey) 
                       className={`h-9 rounded-lg text-sm tabular-nums transition-colors disabled:cursor-default ${
                         active
                           ? "font-semibold text-white"
-                          : `bg-slate-100 text-muted-foreground ${readOnly ? "" : "hover:bg-slate-200"}`
+                          : `bg-wash text-muted-foreground ${readOnly ? "" : "hover:bg-muted"}`
                       }`}
                       style={active ? { backgroundColor: m.color } : undefined}
                     >
@@ -95,7 +95,7 @@ export function MetricsPanel({ onOpenMetric }: { onOpenMetric: (key: MetricKey) 
               type="button"
               onClick={() => onOpenMetric(m.key)}
               aria-label={`查看${m.label}趨勢`}
-              className="flex flex-col items-start gap-1 rounded-2xl border border-border/70 bg-white px-4 py-3 text-left transition-colors hover:border-slate-300"
+              className="flex flex-col items-start gap-1 rounded-2xl border border-border/70 bg-card px-4 py-3 text-left transition-colors hover:border-slate-300"
             >
               <span className="flex w-full items-center justify-between text-xs text-muted-foreground">
                 {m.label}

@@ -33,7 +33,7 @@ export function LoadError({ error }: { error: Error & { digest?: string } }) {
       <button
         type="button"
         onClick={hardReload}
-        className="rounded-lg bg-ink px-4 py-2 text-sm font-medium text-white"
+        className="rounded-lg bg-chip px-4 py-2 text-sm font-medium text-chip-foreground"
       >
         重新載入
       </button>

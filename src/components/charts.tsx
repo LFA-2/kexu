@@ -5,9 +5,9 @@ import { useState } from "react";
 /** Validated categorical order (fixed, never cycled). Slots 3–5 are below 3:1, so always label them. */
 export const SERIES = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4"];
 export const MAIN = SERIES[0];
-const TRACK = "#e8edf2";
-const GRID = "#e5e7eb";
-const AXIS_TEXT = "#6b7280";
+const TRACK = "var(--muted)";
+const GRID = "var(--border)";
+const AXIS_TEXT = "var(--muted-foreground)";
 
 export function ProgressRing({
   pct,
@@ -114,7 +114,7 @@ export function BarChart({
             strokeDasharray="4 4"
           />
         ))}
-        <line x1={0} x2={W} y1={H - 0.5} y2={H - 0.5} stroke="#cbd5e1" />
+        <line x1={0} x2={W} y1={H - 0.5} y2={H - 0.5} stroke="var(--border)" />
         {data.map((d, i) => {
           const cx = i * slot + slot / 2;
           const h =
@@ -184,7 +184,7 @@ function roundedTopBar(x: number, y: number, w: number, h: number, r: number) {
 function Tooltip({ leftPct, children }: { leftPct: number; children: React.ReactNode }) {
   return (
     <div
-      className="pointer-events-none absolute top-0 z-10 -translate-x-1/2 whitespace-nowrap rounded-md border border-border/80 bg-white px-2 py-1 text-xs shadow-md"
+      className="pointer-events-none absolute top-0 z-10 -translate-x-1/2 whitespace-nowrap rounded-md border border-border/80 bg-card px-2 py-1 text-xs shadow-md"
       style={{ left: `${Math.max(12, Math.min(88, leftPct))}%` }}
     >
       {children}
@@ -288,14 +288,14 @@ export function LineChart({
             cy={y(p.v)}
             r={n > 40 ? 2.5 : 4}
             fill={color}
-            stroke="#fff"
+            stroke="var(--card)"
             strokeWidth={2}
           />
         ))}
         {hp && hover !== null && hp.value !== undefined && (
           <g>
-            <line x1={x(hover)} x2={x(hover)} y1={PAD.top} y2={PAD.top + innerH} stroke="#94a3b8" />
-            <circle cx={x(hover)} cy={y(hp.value)} r={5} fill={color} stroke="#fff" strokeWidth={2} />
+            <line x1={x(hover)} x2={x(hover)} y1={PAD.top} y2={PAD.top + innerH} stroke="var(--muted-foreground)" />
+            <circle cx={x(hover)} cy={y(hp.value)} r={5} fill={color} stroke="var(--card)" strokeWidth={2} />
           </g>
         )}
       </svg>
@@ -369,7 +369,7 @@ export function Heatmap({
   const dow = (end.getDay() + 6) % 7;
   const start = new Date(end);
   start.setDate(end.getDate() - dow - (weeks - 1) * 7);
-  const ramp = ["#eef2f7", "#bcd4f2", "#7eaee6", "#2a78d6"];
+  const ramp = ["var(--wash)", "#bcd4f2", "#7eaee6", "#2a78d6"];
   const cells: { key: string; col: number; row: number; n: number; future: boolean }[] = [];
   for (let i = 0; i < weeks * 7; i++) {
     const d = new Date(start);
@@ -396,7 +396,7 @@ export function Heatmap({
             height={S}
             rx={3}
             fill={c.future ? "transparent" : ramp[Math.min(3, c.n)]}
-            stroke={hover === c.key ? "#14212b" : "none"}
+            stroke={hover === c.key ? "var(--ink)" : "none"}
             onMouseEnter={() => setHover(c.key)}
             onMouseLeave={() => setHover(null)}
             onClick={() => setHover(c.key)}

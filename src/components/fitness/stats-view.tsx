@@ -70,7 +70,7 @@ export function StatsView({ onBack }: { onBack: () => void }) {
         <h2 className="font-display mt-1 text-2xl tracking-tight text-ink sm:text-3xl">分析</h2>
       </header>
 
-      <section className="rounded-2xl border border-border/70 bg-white p-4 sm:p-5">
+      <section className="rounded-2xl border border-border/70 bg-card p-4 sm:p-5">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
           <h3 className="font-display text-lg text-ink">近 12 週・{m.label}</h3>
           <div className="flex rounded-lg border border-border/80 p-0.5">
@@ -79,7 +79,7 @@ export function StatsView({ onBack }: { onBack: () => void }) {
                 key={k}
                 type="button"
                 onClick={() => setMetric(k)}
-                className={`rounded-md px-2 py-1 text-xs ${metric === k ? "bg-ink text-white" : "text-muted-foreground"}`}
+                className={`rounded-md px-2 py-1 text-xs ${metric === k ? "bg-chip text-chip-foreground" : "text-muted-foreground"}`}
               >
                 {METRICS[k].label}
               </button>
@@ -103,7 +103,7 @@ export function StatsView({ onBack }: { onBack: () => void }) {
       {ex ? (
         <ExerciseProgress ex={ex} options={done} onPick={setExId} />
       ) : (
-        <p className="rounded-2xl border border-dashed border-border bg-white px-4 py-10 text-center text-sm text-muted-foreground">
+        <p className="rounded-2xl border border-dashed border-border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
           完成第一次訓練後就會出現各動作的進步曲線
         </p>
       )}
@@ -163,13 +163,13 @@ function ExerciseProgress({
   const label = cardio ? (cardioByPace ? "配速（分/km，越低越快）" : "時間（分）") : weighted ? "估計 1RM（kg）" : "最多次數";
 
   return (
-    <section className="rounded-2xl border border-border/70 bg-white p-4 sm:p-5">
+    <section className="rounded-2xl border border-border/70 bg-card p-4 sm:p-5">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h3 className="font-display text-lg text-ink">動作進步</h3>
         <select
           value={ex.id}
           onChange={(e) => onPick(e.target.value)}
-          className="h-8 rounded-lg border border-input bg-white px-2 text-sm"
+          className="h-8 rounded-lg border border-input bg-card px-2 text-sm"
         >
           {options.map((o) => (
             <option key={o.id} value={o.id}>
@@ -216,7 +216,7 @@ function PrTable() {
 
   if (prs.best.size === 0 && prs.cardioBest.size === 0) return null;
   return (
-    <section className="rounded-2xl border border-border/70 bg-white p-4 sm:p-5">
+    <section className="rounded-2xl border border-border/70 bg-card p-4 sm:p-5">
       <h3 className="font-display mb-3 flex items-center gap-2 text-lg text-ink">
         <Trophy className="size-4 text-amber-600" />
         個人紀錄
@@ -311,7 +311,7 @@ export function BodyView({ onBack }: { onBack: () => void }) {
       </header>
 
       {!readOnly && (
-        <div className="grid grid-cols-2 gap-3 rounded-2xl border border-border/70 bg-white p-4 sm:grid-cols-[auto_1fr_1fr_auto] sm:items-end">
+        <div className="grid grid-cols-2 gap-3 rounded-2xl border border-border/70 bg-card p-4 sm:grid-cols-[auto_1fr_1fr_auto] sm:items-end">
           <label className="col-span-2 grid gap-1 text-xs text-muted-foreground sm:col-span-1">
             日期
             <Input type="date" value={date} max={today} onChange={(e) => e.target.value && pickDate(e.target.value)} />
@@ -330,7 +330,7 @@ export function BodyView({ onBack }: { onBack: () => void }) {
         </div>
       )}
 
-      <section className="rounded-2xl border border-border/70 bg-white p-4 sm:p-5">
+      <section className="rounded-2xl border border-border/70 bg-card p-4 sm:p-5">
         <div className="mb-3 flex items-center justify-between">
           <h3 className="font-display text-lg text-ink">體重</h3>
           <div className="flex rounded-lg border border-border/80 p-0.5">
@@ -339,7 +339,7 @@ export function BodyView({ onBack }: { onBack: () => void }) {
                 key={r}
                 type="button"
                 onClick={() => setRange(r)}
-                className={`rounded-md px-2 py-1 text-xs ${range === r ? "bg-ink text-white" : "text-muted-foreground"}`}
+                className={`rounded-md px-2 py-1 text-xs ${range === r ? "bg-chip text-chip-foreground" : "text-muted-foreground"}`}
               >
                 {r === 365 ? "1 年" : `${r} 天`}
               </button>
@@ -349,7 +349,7 @@ export function BodyView({ onBack }: { onBack: () => void }) {
         <LineChart points={points} unit=" kg" />
       </section>
       {fatPoints.some((p) => p.value !== undefined) && (
-        <section className="rounded-2xl border border-border/70 bg-white p-4 sm:p-5">
+        <section className="rounded-2xl border border-border/70 bg-card p-4 sm:p-5">
           <h3 className="font-display mb-3 text-lg text-ink">體脂</h3>
           <LineChart points={fatPoints} unit="%" />
         </section>

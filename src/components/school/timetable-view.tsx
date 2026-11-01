@@ -75,7 +75,7 @@ export function TimetableView() {
       </header>
 
       {timetable.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-border bg-white px-6 py-16 text-center">
+        <div className="rounded-2xl border border-dashed border-border bg-card px-6 py-16 text-center">
           <p className="font-display text-xl text-ink">還沒有課表</p>
           {!readOnly && (
             <p className="mt-2 text-sm text-muted-foreground">
@@ -95,10 +95,10 @@ export function TimetableView() {
                 <section key={d}>
                   <h3 className={`mb-1.5 text-sm ${d === today ? "font-medium text-ink" : "text-muted-foreground"}`}>
                     星期{WEEKDAYS[d - 1]}
-                    {d === today && <span className="ml-1.5 text-xs text-teal-800">今天</span>}
+                    {d === today && <span className="ml-1.5 text-xs text-primary">今天</span>}
                   </h3>
                   {slots.length === 0 ? (
-                    <p className="rounded-xl border border-dashed border-border/70 bg-white px-3 py-2.5 text-sm text-muted-foreground">
+                    <p className="rounded-xl border border-dashed border-border/70 bg-card px-3 py-2.5 text-sm text-muted-foreground">
                       沒有課
                     </p>
                   ) : (
@@ -111,7 +111,7 @@ export function TimetableView() {
                               type="button"
                               disabled={readOnly}
                               onClick={() => setEditing(t)}
-                              className="flex w-full items-center gap-3 rounded-xl border border-border/70 bg-white px-3 py-3 text-left disabled:cursor-default"
+                              className="flex w-full items-center gap-3 rounded-xl border border-border/70 bg-card px-3 py-3 text-left disabled:cursor-default"
                             >
                               <span className="h-10 w-1 shrink-0 rounded-full" style={{ backgroundColor: color }} />
                               <span className="w-24 shrink-0 text-sm tabular-nums text-ink">
@@ -137,7 +137,7 @@ export function TimetableView() {
             })}
           </div>
 
-          <div className="hidden overflow-hidden rounded-2xl border border-border/70 bg-white sm:block">
+          <div className="hidden overflow-hidden rounded-2xl border border-border/70 bg-card sm:block">
             <div
               className="grid border-b border-border/70 text-center text-sm text-muted-foreground"
               style={{ gridTemplateColumns: `3rem repeat(${days.length}, minmax(0, 1fr))` }}
@@ -286,7 +286,7 @@ function SlotDialog({
                       setDays((ds) => (on ? ds.filter((x) => x !== d) : [...ds, d].sort()))
                     }
                     className={`flex-1 rounded-lg border py-1.5 text-sm transition-colors ${
-                      on ? "border-ink bg-ink text-white" : "border-border bg-white text-muted-foreground"
+                      on ? "border-chip bg-chip text-chip-foreground" : "border-border bg-card text-muted-foreground"
                     }`}
                     aria-pressed={on}
                   >
@@ -315,7 +315,7 @@ function SlotDialog({
               id="tt-course"
               value={courseId}
               onChange={(e) => setCourseId(e.target.value)}
-              className="h-9 rounded-lg border border-input bg-white px-2.5 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+              className="h-9 rounded-lg border border-input bg-card px-2.5 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
             >
               {courses.map((c) => (
                 <option key={c.id} value={c.id}>

@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Fraunces, Noto_Sans_TC } from "next/font/google";
+import { THEME_BOOT_SCRIPT } from "@/lib/themes";
 import "./globals.css";
 
 const display = Fraunces({
@@ -29,8 +30,11 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="zh-Hant" className={`${display.variable} ${sans.variable} h-full antialiased`}>
-      <body className="min-h-full flex flex-col font-sans text-ink">{children}</body>
+    <html lang="zh-Hant" className={`${display.variable} ${sans.variable} h-full antialiased`} suppressHydrationWarning>
+      <body className="min-h-full flex flex-col font-sans text-ink">
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
+        {children}
+      </body>
     </html>
   );
 }

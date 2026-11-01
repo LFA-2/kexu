@@ -45,7 +45,7 @@ export function MonthCalendar({
   }, [cursor]);
 
   return (
-    <section className="rounded-2xl border border-border/70 bg-white p-4 sm:p-5">
+    <section className="rounded-2xl border border-border/70 bg-card p-4 sm:p-5">
       <div className="mb-4 flex items-center justify-between gap-3">
         <h3 className="font-display text-lg text-ink">
           {format(cursor, "yyyy年 M月", { locale: zhTW })}
@@ -100,12 +100,12 @@ export function MonthCalendar({
             : marked
               ? "bg-amber-100"
               : today
-                ? "bg-teal-50"
+                ? "bg-accent"
                 : inMonth
-                  ? "bg-slate-50/80"
+                  ? "bg-soft/80"
                   : "bg-transparent";
           const ring = today
-            ? "ring-2 ring-teal-700 ring-inset"
+            ? "ring-2 ring-primary ring-inset"
             : marked
               ? "ring-2 ring-amber-500 ring-inset"
               : "";
@@ -120,7 +120,7 @@ export function MonthCalendar({
               aria-label={format(day, "M月d日", { locale: zhTW })}
               className={`relative flex min-h-14 flex-col items-center rounded-xl px-1 py-1.5 transition-colors disabled:cursor-default sm:min-h-16 ${background} ${ring} ${
                 inMonth ? "" : "opacity-40"
-              } ${clickable && !fill ? "hover:bg-slate-100" : ""}`}
+              } ${clickable && !fill ? "hover:bg-wash" : ""}`}
               style={fill ? { backgroundColor: fill } : undefined}
             >
               <span
@@ -128,7 +128,7 @@ export function MonthCalendar({
                   fill
                     ? "font-semibold text-white"
                     : today
-                      ? "font-semibold text-teal-800"
+                      ? "font-semibold text-primary"
                       : "text-ink"
                 }`}
               >
@@ -137,7 +137,7 @@ export function MonthCalendar({
               {today && (
                 <span
                   className={`mt-0.5 text-[9px] font-medium tracking-wide ${
-                    fill ? "text-white" : "text-teal-700"
+                    fill ? "text-white" : "text-primary"
                   }`}
                 >
                   TODAY

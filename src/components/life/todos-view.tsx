@@ -51,7 +51,7 @@ export function TodosView({ color, onBack }: { color: string; onBack: () => void
       {!readOnly && (
         <form
           onSubmit={submit}
-          className="grid gap-3 rounded-2xl border border-border/70 bg-white p-4 sm:grid-cols-[1fr_auto_auto_auto] sm:items-end sm:p-5"
+          className="grid gap-3 rounded-2xl border border-border/70 bg-card p-4 sm:grid-cols-[1fr_auto_auto_auto] sm:items-end sm:p-5"
         >
           <div className="grid gap-1.5">
             <Label htmlFor="todo-title">名稱</Label>
@@ -93,7 +93,7 @@ export function TodosView({ color, onBack }: { color: string; onBack: () => void
 
       <section className="space-y-2">
         {open.length === 0 ? (
-          <p className="rounded-2xl border border-dashed border-border bg-white px-4 py-10 text-center text-sm text-muted-foreground">
+          <p className="rounded-2xl border border-dashed border-border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
             沒有未完成的事項
           </p>
         ) : (
@@ -149,7 +149,7 @@ function TodoRow({
   const status = relativeStatus(todo.date, todo.done);
   return (
     <li
-      className={`flex items-start gap-3 rounded-xl border bg-white px-3 py-3 ${
+      className={`flex items-start gap-3 rounded-xl border bg-card px-3 py-3 ${
         todo.done ? "border-border/50 opacity-70" : "border-border/70"
       }`}
     >

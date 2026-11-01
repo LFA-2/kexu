@@ -34,7 +34,7 @@ export function AvailabilityView({ color, onBack }: { color: string; onBack: () 
         isDayDisabled={(key) => key < today}
       />
 
-      <section className="rounded-2xl border border-border/70 bg-white p-4 sm:p-5">
+      <section className="rounded-2xl border border-border/70 bg-card p-4 sm:p-5">
         <h3 className="font-display text-lg text-ink">接下來有空</h3>
         {upcoming.length === 0 ? (
           <p className="mt-2 text-sm text-muted-foreground">還沒有標記任何日期</p>

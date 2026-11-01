@@ -140,7 +140,7 @@ export function BattleshipView({
                   }
                 />
                 {mine.finished && (
-                  <p className="mt-3 rounded-xl bg-teal-50 px-4 py-3 text-sm font-medium text-teal-800">
+                  <p className="mt-3 rounded-xl bg-accent px-4 py-3 text-sm font-medium text-primary">
                     全部擊沉！共 {mine.shots} 砲
                   </p>
                 )}
@@ -328,7 +328,7 @@ function FleetEditor({
           <li
             key={i}
             className={`flex items-center gap-2 rounded-xl border px-2 py-1.5 transition-colors ${
-              selected === i ? "border-ink" : "border-border/70"
+              selected === i ? "border-chip" : "border-border/70"
             }`}
           >
             <button
@@ -376,7 +376,7 @@ function FleetEditor({
               type="button"
               onClick={() => setOrientation(o)}
               className={`rounded-md px-2.5 py-1 text-xs transition-colors ${
-                orientation === o ? "bg-ink text-white" : "text-muted-foreground hover:text-ink"
+                orientation === o ? "bg-chip text-chip-foreground" : "text-muted-foreground hover:text-ink"
               }`}
             >
               {o === "h" ? "橫放" : "直放"}
@@ -391,7 +391,7 @@ function FleetEditor({
           look={(cell) => {
             const i = owner.get(cell);
             if (i === undefined) return { className: "bg-slate-100 hover:bg-teal-100", label: "海" };
-            return { className: i === selected ? "bg-ink" : "bg-slate-500", label: `${SHIP_LENGTHS[i]} 格船` };
+            return { className: i === selected ? "bg-chip" : "bg-slate-500", label: `${SHIP_LENGTHS[i]} 格船` };
           }}
         />
       </div>

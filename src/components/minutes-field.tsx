@@ -48,8 +48,8 @@ export function MinutesField({
             onClick={() => onChange(m)}
             className={`rounded-full border px-2.5 py-0.5 text-xs transition-colors ${
               value === m
-                ? "border-ink bg-ink text-white"
-                : "border-border/80 bg-white text-muted-foreground hover:text-ink"
+                ? "border-chip bg-chip text-chip-foreground"
+                : "border-border/80 bg-card text-muted-foreground hover:text-ink"
             }`}
           >
             {m < 60 ? `${m} 分` : `${m / 60} 小時`}

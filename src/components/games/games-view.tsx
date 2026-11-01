@@ -32,9 +32,9 @@ export function GamesView({ onBack, onOpen }: { onBack: () => void; onOpen: (id:
             key={id}
             type="button"
             onClick={() => onOpen(id)}
-            className="flex w-full items-center gap-3 rounded-2xl border border-border/70 bg-white p-4 text-left transition-colors hover:border-slate-300 sm:p-5"
+            className="flex w-full items-center gap-3 rounded-2xl border border-border/70 bg-card p-4 text-left transition-colors hover:border-slate-300 sm:p-5"
           >
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-ink">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-wash text-ink">
               <Icon className="size-5" />
             </span>
             <span className="min-w-0 flex-1">

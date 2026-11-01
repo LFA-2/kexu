@@ -97,7 +97,7 @@ export function TimelineView({ kind }: { kind: Kind }) {
       <MonthCalendar colorsByDate={colorsByDate} />
 
       {courses.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-border bg-white px-6 py-12 text-center text-sm text-muted-foreground">
+        <div className="rounded-2xl border border-dashed border-border bg-card px-6 py-12 text-center text-sm text-muted-foreground">
           {readOnly ? "還沒有任何課程。" : "請先到「課程」新增課程。"}
         </div>
       ) : (
@@ -117,7 +117,7 @@ export function TimelineView({ kind }: { kind: Kind }) {
               </div>
 
               {courseItems.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-border/70 bg-white px-4 py-4 text-sm text-muted-foreground">
+                <div className="rounded-xl border border-dashed border-border/70 bg-card px-4 py-4 text-sm text-muted-foreground">
                   這門課還沒有{title}
                 </div>
               ) : (
@@ -131,7 +131,7 @@ export function TimelineView({ kind }: { kind: Kind }) {
                           style={{ backgroundColor: item.done ? "#94a3b8" : course.color }}
                         />
                         <div
-                          className={`rounded-xl border bg-white px-4 py-3 ${
+                          className={`rounded-xl border bg-card px-4 py-3 ${
                             item.done ? "border-border/50 opacity-70" : "border-border/70"
                           }`}
                         >

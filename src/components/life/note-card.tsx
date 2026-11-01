@@ -14,7 +14,7 @@ export function NoteCard() {
   const value = draft ?? saved;
 
   return (
-    <section className="rounded-2xl border border-border/70 bg-white p-4 sm:p-5">
+    <section className="rounded-2xl border border-border/70 bg-card p-4 sm:p-5">
       <h3 className="font-display text-lg text-ink">今日須知</h3>
       <p className="mt-1 text-xs text-muted-foreground">
         {readOnly ? "今天留給連結的人的話" : "留給連結的人看的話，只顯示今天這一則"}

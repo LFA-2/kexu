@@ -201,7 +201,7 @@ export function WorkoutLogger({
         </Button>
       </div>
 
-      <header className="rounded-2xl border border-border/70 bg-white p-4 sm:p-5">
+      <header className="rounded-2xl border border-border/70 bg-card p-4 sm:p-5">
         <Input
           value={session.title}
           onChange={(e) => setSession((s) => ({ ...s, title: e.target.value.slice(0, 40) }))}
@@ -242,7 +242,7 @@ export function WorkoutLogger({
         const ex = exerciseById.get(entry.exerciseId);
         const prev = lastEntry(entry.exerciseId);
         return (
-          <section key={`${entry.exerciseId}-${i}`} className="rounded-2xl border border-border/70 bg-white p-4">
+          <section key={`${entry.exerciseId}-${i}`} className="rounded-2xl border border-border/70 bg-card p-4">
             <div className="mb-2 flex items-start justify-between gap-2">
               <div>
                 <h3 className="font-medium text-ink">{ex?.name ?? "未知動作"}</h3>
@@ -278,7 +278,7 @@ export function WorkoutLogger({
                   {entry.sets.map((set, k) => (
                     <li
                       key={k}
-                      className={`grid grid-cols-[2rem_1fr_1fr_2.5rem] items-center gap-2 rounded-lg px-1 py-1 ${set.done ? "bg-teal-50" : ""}`}
+                      className={`grid grid-cols-[2rem_1fr_1fr_2.5rem] items-center gap-2 rounded-lg px-1 py-1 ${set.done ? "bg-accent" : ""}`}
                     >
                       <span className="text-center text-sm tabular-nums text-muted-foreground">{k + 1}</span>
                       <NumberInput
@@ -308,7 +308,7 @@ export function WorkoutLogger({
                           if (!set.done) setRestEnd(Date.now() + restSec * 1000);
                         }}
                         className={`mx-auto flex size-8 items-center justify-center rounded-lg border transition-colors ${
-                          set.done ? "border-transparent bg-teal-700 text-white" : "border-border text-muted-foreground"
+                          set.done ? "border-transparent bg-primary text-primary-foreground" : "border-border text-muted-foreground"
                         }`}
                         aria-pressed={set.done}
                         aria-label={`第 ${k + 1} 組完成`}
@@ -384,7 +384,7 @@ export function WorkoutLogger({
         新增動作
       </Button>
 
-      <div className="grid gap-3 rounded-2xl border border-border/70 bg-white p-4 sm:grid-cols-[1fr_auto]">
+      <div className="grid gap-3 rounded-2xl border border-border/70 bg-card p-4 sm:grid-cols-[1fr_auto]">
         <div className="grid gap-1.5">
           <Label htmlFor="ws-note">心得（選填）</Label>
           <Textarea
@@ -404,7 +404,7 @@ export function WorkoutLogger({
                 type="button"
                 onClick={() => setSession((s) => ({ ...s, rpe: s.rpe === n ? undefined : n }))}
                 className={`h-8 w-6 rounded text-xs ${
-                  session.rpe && n <= session.rpe ? "bg-ink text-white" : "bg-slate-100 text-muted-foreground"
+                  session.rpe && n <= session.rpe ? "bg-chip text-chip-foreground" : "bg-wash text-muted-foreground"
                 }`}
               >
                 {n}
@@ -422,7 +422,7 @@ export function WorkoutLogger({
 
       {restEnd && (
         <div className="fixed inset-x-0 bottom-20 z-40 px-4 sm:bottom-6">
-          <div className="mx-auto flex max-w-md items-center gap-3 rounded-2xl bg-ink px-4 py-3 text-white shadow-lg">
+          <div className="mx-auto flex max-w-md items-center gap-3 rounded-2xl bg-chip px-4 py-3 text-chip-foreground shadow-lg">
             <Timer className="size-5 shrink-0" />
             <div className="min-w-0 flex-1">
               <p className="text-xs opacity-70">{restLeft === 0 ? "休息結束！" : "組間休息"}</p>
@@ -432,19 +432,19 @@ export function WorkoutLogger({
             </div>
             <button
               type="button"
-              className="rounded-lg bg-white/10 px-2 py-1 text-sm"
+              className="rounded-lg bg-chip-foreground/15 px-2 py-1 text-sm"
               onClick={() => setRestEnd((e) => (e ? Math.max(Date.now(), e - 15000) : e))}
             >
               −15
             </button>
             <button
               type="button"
-              className="rounded-lg bg-white/10 px-2 py-1 text-sm"
+              className="rounded-lg bg-chip-foreground/15 px-2 py-1 text-sm"
               onClick={() => setRestEnd((e) => (e ? e + 15000 : e))}
             >
               +15
             </button>
-            <button type="button" className="rounded-lg bg-white/10 px-2 py-1 text-sm" onClick={() => setRestEnd(null)}>
+            <button type="button" className="rounded-lg bg-chip-foreground/15 px-2 py-1 text-sm" onClick={() => setRestEnd(null)}>
               跳過
             </button>
           </div>
@@ -457,7 +457,7 @@ export function WorkoutLogger({
                   setRestSec(sec);
                   setRestEnd(Date.now() + sec * 1000);
                 }}
-                className={`rounded-full px-2 py-0.5 text-[11px] shadow ${restSec === sec ? "bg-ink text-white" : "bg-white text-muted-foreground"}`}
+                className={`rounded-full px-2 py-0.5 text-[11px] shadow ${restSec === sec ? "bg-chip text-chip-foreground" : "bg-card text-muted-foreground"}`}
               >
                 預設 {sec}s
               </button>
@@ -471,7 +471,7 @@ export function WorkoutLogger({
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl bg-slate-50 px-2 py-2">
+    <div className="rounded-xl bg-soft px-2 py-2">
       <p className="text-[11px] text-muted-foreground">{label}</p>
       <p className="font-display text-lg tabular-nums text-ink">{value}</p>
     </div>
@@ -560,7 +560,7 @@ export function FinishedCard({
   const cardio = session.entries.reduce((a, e) => a + (e.cardio?.distance ?? 0), 0);
   return (
     <div className="space-y-5">
-      <div className="rounded-2xl border border-border/70 bg-white p-6 text-center">
+      <div className="rounded-2xl border border-border/70 bg-card p-6 text-center">
         <p className="text-4xl">💪</p>
         <h2 className="font-display mt-2 text-2xl text-ink">訓練完成</h2>
         <p className="mt-1 text-sm text-muted-foreground">{session.title}</p>

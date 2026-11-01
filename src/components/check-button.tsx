@@ -23,7 +23,7 @@ export function CheckButton({
       className={`flex size-7 shrink-0 items-center justify-center rounded-full border transition-colors disabled:cursor-default ${
         done
           ? "border-transparent text-white"
-          : `border-border text-muted-foreground ${readOnly ? "" : "hover:border-teal-700"}`
+          : `border-border text-muted-foreground ${readOnly ? "" : "hover:border-primary"}`
       } ${className}`}
       style={done ? { backgroundColor: color } : undefined}
       aria-pressed={done}

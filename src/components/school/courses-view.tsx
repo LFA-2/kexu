@@ -35,7 +35,7 @@ export function CoursesView({
       </header>
 
       {courses.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-border bg-white px-6 py-16 text-center">
+        <div className="rounded-2xl border border-dashed border-border bg-card px-6 py-16 text-center">
           <p className="font-display text-xl text-ink">還沒有任何課程</p>
           {!readOnly && (
             <p className="mt-2 text-sm text-muted-foreground">
@@ -59,14 +59,14 @@ export function CoursesView({
                 <button
                   type="button"
                   onClick={() => onSelectCourse(course.id)}
-                  className="group w-full overflow-hidden rounded-2xl border border-border/70 bg-white text-left transition-colors hover:border-teal-700/40 hover:bg-teal-50/30"
+                  className="group w-full overflow-hidden rounded-2xl border border-border/70 bg-card text-left transition-colors hover:border-primary/40 hover:bg-accent/40"
                 >
                   <div className="h-1.5 w-full" style={{ backgroundColor: course.color }} />
                   <div className="flex items-center gap-3 p-5">
                     <div className="min-w-0 flex-1">
                       <h3 className="font-display text-xl text-ink">{course.name}</h3>
                       <div
-                        className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100"
+                        className="mt-3 h-2 overflow-hidden rounded-full bg-wash"
                         role="progressbar"
                         aria-valuenow={pct}
                         aria-valuemin={0}

@@ -59,7 +59,7 @@ export function MetricChartView({
             className={`rounded-full border px-3 py-1 text-sm transition-colors ${
               m.key === key
                 ? "border-transparent text-white"
-                : "border-border/80 bg-white text-muted-foreground hover:text-ink"
+                : "border-border/80 bg-card text-muted-foreground hover:text-ink"
             }`}
             style={m.key === key ? { backgroundColor: m.color } : undefined}
           >
@@ -68,7 +68,7 @@ export function MetricChartView({
         ))}
       </div>
 
-      <section className="rounded-2xl border border-border/70 bg-white p-4 sm:p-5">
+      <section className="rounded-2xl border border-border/70 bg-card p-4 sm:p-5">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <div className="flex gap-5 text-sm">
             <Stat label="平均" value={avg === null ? "—" : avg.toFixed(1)} />
@@ -83,7 +83,7 @@ export function MetricChartView({
                 type="button"
                 onClick={() => setRange(r.days)}
                 className={`rounded-md px-2.5 py-1 text-xs transition-colors ${
-                  range === r.days ? "bg-ink text-white" : "text-muted-foreground hover:text-ink"
+                  range === r.days ? "bg-chip text-chip-foreground" : "text-muted-foreground hover:text-ink"
                 }`}
               >
                 {r.label}
@@ -148,11 +148,11 @@ function MetricChart({
             x2={W - PAD.right}
             y1={y(v)}
             y2={y(v)}
-            stroke={v === 1 || v === 5 || v === 10 ? "#cbd5e1" : "#eef2f6"}
+            stroke={v === 1 || v === 5 || v === 10 ? "var(--border)" : "var(--wash)"}
             strokeWidth={1}
           />
           {(v === 1 || v === 5 || v === 10) && (
-            <text x={PAD.left - 8} y={y(v) + 4} textAnchor="end" fontSize="12" fill="#64748b">
+            <text x={PAD.left - 8} y={y(v) + 4} textAnchor="end" fontSize="12" fill="var(--muted-foreground)">
               {v}
             </text>
           )}
@@ -165,7 +165,7 @@ function MetricChart({
           y={H - 8}
           textAnchor={i === 0 ? "start" : i === n - 1 ? "end" : "middle"}
           fontSize="12"
-          fill="#64748b"
+          fill="var(--muted-foreground)"
         >
           {format(parseISO(points[i].date), "M/d")}
         </text>
@@ -174,7 +174,7 @@ function MetricChart({
         <path d={path} fill="none" stroke={color} strokeWidth={2.5} strokeLinejoin="round" />
       )}
       {defined.map((p) => (
-        <circle key={p.i} cx={x(p.i)} cy={y(p.v)} r={r} fill="white" stroke={color} strokeWidth={2}>
+        <circle key={p.i} cx={x(p.i)} cy={y(p.v)} r={r} fill="var(--card)" stroke={color} strokeWidth={2}>
           <title>{`${points[p.i].date}：${p.v}`}</title>
         </circle>
       ))}

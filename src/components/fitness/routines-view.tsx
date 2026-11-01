@@ -68,7 +68,7 @@ export function RoutinesView({
       </header>
 
       {!readOnly && (
-        <section className="rounded-2xl border border-border/70 bg-white p-4 sm:p-5">
+        <section className="rounded-2xl border border-border/70 bg-card p-4 sm:p-5">
           <h3 className="font-display text-lg text-ink">依部位建立菜單</h3>
           <p className="mt-0.5 text-xs text-muted-foreground">
             點一個部位，會先帶入常見動作，你可以再自己增減、調整組數。
@@ -81,7 +81,7 @@ export function RoutinesView({
                   key={m}
                   type="button"
                   onClick={() => setEditing({ routine: null, preset: m })}
-                  className="flex items-center gap-1.5 rounded-full border border-border/80 bg-white px-3 py-1.5 text-sm text-ink hover:bg-slate-50"
+                  className="flex items-center gap-1.5 rounded-full border border-border/80 bg-card px-3 py-1.5 text-sm text-ink hover:bg-soft"
                 >
                   <span className="size-2.5 rounded-full" style={{ backgroundColor: MUSCLE_COLORS[m] }} />
                   {m}
@@ -100,7 +100,7 @@ export function RoutinesView({
         </section>
       )}
 
-      <section className="rounded-2xl border border-border/70 bg-white p-4 sm:p-5">
+      <section className="rounded-2xl border border-border/70 bg-card p-4 sm:p-5">
         <h3 className="font-display text-lg text-ink">每週課表</h3>
         <p className="mt-0.5 text-xs text-muted-foreground">
           {readOnly ? "每天排了哪些菜單" : "每天可以點選多個菜單，例如週一：胸＋肩＋背。沒選就是休息日。"}
@@ -134,7 +134,7 @@ export function RoutinesView({
                             aria-pressed={on}
                             onClick={() => toggleWeekPlan(d, r.id)}
                             className={`whitespace-nowrap rounded-full border px-2.5 py-1 text-xs transition-colors ${
-                              on ? "text-white" : "border-border/80 bg-white text-muted-foreground hover:text-ink"
+                              on ? "text-white" : "border-border/80 bg-card text-muted-foreground hover:text-ink"
                             }`}
                             style={on ? { backgroundColor: r.color, borderColor: r.color } : undefined}
                           >
@@ -158,14 +158,14 @@ export function RoutinesView({
       <section className="space-y-3">
         <h3 className="font-display text-lg text-ink">訓練菜單</h3>
         {routines.length === 0 && (
-          <p className="rounded-2xl border border-dashed border-border bg-white px-4 py-8 text-center text-sm text-muted-foreground">
+          <p className="rounded-2xl border border-dashed border-border bg-card px-4 py-8 text-center text-sm text-muted-foreground">
             還沒有菜單，可以從上面挑部位建立，或從下方範本開始
           </p>
         )}
         {routines.map((r) => (
           <div
             key={r.id}
-            className="overflow-hidden rounded-2xl border border-border/70 bg-white"
+            className="overflow-hidden rounded-2xl border border-border/70 bg-card"
           >
             <div className="h-1.5" style={{ backgroundColor: r.color }} />
             <div className="p-4">
@@ -174,7 +174,7 @@ export function RoutinesView({
                   <h4 className="font-display flex flex-wrap items-center gap-2 text-lg text-ink">
                     {r.name}
                     {r.muscle && r.muscle !== r.name && (
-                      <span className="rounded-full bg-slate-100 px-2 py-0.5 font-sans text-[11px] text-muted-foreground">
+                      <span className="rounded-full bg-wash px-2 py-0.5 font-sans text-[11px] text-muted-foreground">
                         {r.muscle}
                       </span>
                     )}
@@ -224,7 +224,7 @@ export function RoutinesView({
           <h3 className="font-display text-lg text-ink">範本</h3>
           <div className="grid gap-3 sm:grid-cols-3">
             {TEMPLATE_GROUPS.map((g, i) => (
-              <div key={g.name} className="rounded-2xl border border-border/70 bg-white p-4">
+              <div key={g.name} className="rounded-2xl border border-border/70 bg-card p-4">
                 <h4 className="font-medium text-ink">{g.name}</h4>
                 <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{g.desc}</p>
                 <p className="mt-2 text-xs text-muted-foreground">
@@ -314,7 +314,7 @@ function RoutineEditor({
         {routine ? "編輯菜單" : preset ? `新增「${preset}」菜單` : "新增菜單"}
       </h2>
 
-      <div className="grid gap-4 rounded-2xl border border-border/70 bg-white p-4">
+      <div className="grid gap-4 rounded-2xl border border-border/70 bg-card p-4">
         <div className="grid gap-2">
           <Label htmlFor="rt-name">名稱</Label>
           <Input id="rt-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="例如：胸、背、有氧" maxLength={40} />
@@ -331,7 +331,7 @@ function RoutineEditor({
                   if (m && !routine) setColor(MUSCLE_COLORS[m]);
                 }}
                 className={`whitespace-nowrap rounded-full border px-2.5 py-1 text-xs ${
-                  muscle === m ? "border-ink bg-ink text-white" : "border-border/80 text-muted-foreground"
+                  muscle === m ? "border-chip bg-chip text-chip-foreground" : "border-border/80 text-muted-foreground"
                 }`}
               >
                 {m || "不分"}
@@ -362,7 +362,7 @@ function RoutineEditor({
           const ex = exerciseById.get(it.exerciseId);
           const cardio = ex?.kind === "cardio";
           return (
-            <li key={i} className="rounded-xl border border-border/70 bg-white p-3">
+            <li key={i} className="rounded-xl border border-border/70 bg-card p-3">
               <div className="flex items-center justify-between gap-2">
                 <span className="font-medium text-ink">{ex?.name ?? "?"}</span>
                 <div className="flex">

@@ -70,7 +70,7 @@ export function ExercisePicker({
               type="button"
               onClick={() => setMuscle(m)}
               className={`shrink-0 whitespace-nowrap rounded-full border px-2.5 py-1 text-xs ${
-                muscle === m ? "border-ink bg-ink text-white" : "border-border/80 text-muted-foreground"
+                muscle === m ? "border-chip bg-chip text-chip-foreground" : "border-border/80 text-muted-foreground"
               }`}
             >
               {m === "all" ? "全部" : m}
@@ -83,7 +83,7 @@ export function ExercisePicker({
               <button
                 type="button"
                 onClick={() => pick(e.id)}
-                className="flex w-full items-center justify-between gap-2 rounded-lg px-2 py-2 text-left text-sm hover:bg-slate-50"
+                className="flex w-full items-center justify-between gap-2 rounded-lg px-2 py-2 text-left text-sm hover:bg-soft"
               >
                 <span className="text-ink">{e.name}</span>
                 <span className="text-xs text-muted-foreground">
@@ -115,7 +115,7 @@ export function ExercisePicker({
                     setNewKind(k);
                     if (k === "cardio") setNewMuscle("有氧");
                   }}
-                  className="h-8 flex-1 rounded-lg border border-input bg-white px-2 text-sm"
+                  className="h-8 flex-1 rounded-lg border border-input bg-card px-2 text-sm"
                 >
                   <option value="strength">重量訓練</option>
                   <option value="cardio">有氧</option>
@@ -123,7 +123,7 @@ export function ExercisePicker({
                 <select
                   value={newMuscle}
                   onChange={(e) => setNewMuscle(e.target.value as Muscle)}
-                  className="h-8 flex-1 rounded-lg border border-input bg-white px-2 text-sm"
+                  className="h-8 flex-1 rounded-lg border border-input bg-card px-2 text-sm"
                 >
                   {MUSCLES.map((m) => (
                     <option key={m}>{m}</option>

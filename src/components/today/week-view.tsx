@@ -169,7 +169,7 @@ export function WeekView({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {toggle}
-          <div className="flex items-center rounded-xl border border-border/80 bg-white p-0.5 shadow-sm">
+          <div className="flex items-center rounded-xl border border-border/80 bg-card p-0.5 shadow-sm">
             <Button variant="ghost" size="icon-sm" onClick={() => onShiftWeek(-1)} aria-label="上一週">
               <ChevronLeft />
             </Button>
@@ -183,7 +183,7 @@ export function WeekView({
         </div>
       </header>
 
-      <section className="grid gap-4 rounded-2xl border border-border/70 bg-white p-4 sm:grid-cols-[auto_1fr] sm:p-5">
+      <section className="grid gap-4 rounded-2xl border border-border/70 bg-card p-4 sm:grid-cols-[auto_1fr] sm:p-5">
         <div className="flex items-center gap-4 sm:flex-col sm:items-center">
           <ProgressRing pct={weekPct} label="本週完成" />
           <div className="text-sm sm:text-center">
@@ -246,7 +246,7 @@ export function WeekView({
           <span className="text-xs text-muted-foreground">這週截止的作業、讀書與考試</span>
         </div>
         {deadlines.length === 0 ? (
-          <p className="rounded-2xl border border-dashed border-border bg-white px-4 py-8 text-center text-sm text-muted-foreground">
+          <p className="rounded-2xl border border-dashed border-border bg-card px-4 py-8 text-center text-sm text-muted-foreground">
             這週沒有截止的東西
           </p>
         ) : (
@@ -254,7 +254,7 @@ export function WeekView({
             {deadlines.map((d) => (
               <li
                 key={d.key}
-                className={`rounded-xl border bg-white px-3 py-3 ${d.pct >= 100 ? "border-border/50 bg-slate-50/60" : "border-border/70"}`}
+                className={`rounded-xl border bg-card px-3 py-3 ${d.pct >= 100 ? "border-border/50 bg-soft/60" : "border-border/70"}`}
               >
                 <div className="flex items-start gap-3">
                   <span className="w-12 shrink-0 text-center">
@@ -271,7 +271,7 @@ export function WeekView({
                     <p className="text-xs text-muted-foreground">
                       {d.detail}
                       {d.minutes > 0 && `・約 ${formatMinutes(d.minutes)}`}
-                      {d.date < todayKey && d.pct < 100 && <span className="text-rose-700">・已過期</span>}
+                      {d.date < todayKey && d.pct < 100 && <span className="text-destructive">・已過期</span>}
                     </p>
                     <ProgressSlider
                       value={d.pct}
@@ -300,14 +300,14 @@ export function WeekView({
                 key={d.date}
                 type="button"
                 onClick={() => onOpenDay(d.date)}
-                className={`rounded-2xl border bg-white p-4 text-left transition-colors hover:border-slate-300 ${
-                  d.date === todayKey ? "border-ink/60 ring-1 ring-ink/20" : "border-border/70"
+                className={`rounded-2xl border bg-card p-4 text-left transition-colors hover:border-slate-300 ${
+                  d.date === todayKey ? "border-chip/60 ring-1 ring-ink/20" : "border-border/70"
                 }`}
               >
                 <div className="flex items-baseline justify-between gap-2">
                   <span className="font-medium text-ink">
                     {format(parseISO(d.date), "EEEE M/d", { locale: zhTW })}
-                    {d.date === todayKey && <span className="ml-1.5 text-xs text-teal-800">今天</span>}
+                    {d.date === todayKey && <span className="ml-1.5 text-xs text-primary">今天</span>}
                   </span>
                   <span className="text-xs text-muted-foreground">
                     {d.minutes ? formatMinutes(d.minutes) : ""}
@@ -315,7 +315,7 @@ export function WeekView({
                   </span>
                 </div>
                 {d.date <= todayKey && d.minutes > 0 && (
-                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100">
+                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-wash">
                     <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: SERIES[0] }} />
                   </div>
                 )}

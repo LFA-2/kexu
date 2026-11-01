@@ -43,7 +43,7 @@ export function LoginView() {
         把學校行程收成一條清楚的時間線——課程、作業、考試、讀書進度。
       </p>
 
-      <div className="mt-8 flex rounded-xl border border-border/80 bg-white p-1 shadow-sm">
+      <div className="mt-8 flex rounded-xl border border-border/80 bg-card p-1 shadow-sm">
         {(["signin", "signup"] as const).map((m) => (
           <button
             key={m}
@@ -53,7 +53,7 @@ export function LoginView() {
               setError(null);
             }}
             className={`flex-1 rounded-lg py-2 text-sm font-medium transition-all ${
-              mode === m ? "bg-ink text-white shadow-sm" : "text-muted-foreground hover:text-ink"
+              mode === m ? "bg-chip text-chip-foreground shadow-sm" : "text-muted-foreground hover:text-ink"
             }`}
           >
             {m === "signin" ? "登入" : "註冊"}
@@ -61,7 +61,7 @@ export function LoginView() {
         ))}
       </div>
 
-      <form onSubmit={submit} className="mt-6 grid gap-4 rounded-2xl border border-border/70 bg-white p-5">
+      <form onSubmit={submit} className="mt-6 grid gap-4 rounded-2xl border border-border/70 bg-card p-5">
         {isSignUp && (
           <div className="grid gap-2">
             <Label htmlFor="display-name">顯示名稱</Label>

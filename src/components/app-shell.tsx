@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useLayoutEffect, useMemo, useState } from "react";
 import { AccountView } from "@/components/account-view";
 import { DataTools } from "@/components/data-tools";
 import { LifeView } from "@/components/life/life-view";
@@ -14,6 +14,7 @@ import { TimetableView } from "@/components/school/timetable-view";
 import { FitnessView } from "@/components/fitness/fitness-view";
 import { TodayView } from "@/components/today/today-view";
 import { PERSON_COLORS } from "@/lib/life";
+import { applyTheme, readTheme } from "@/lib/themes";
 import { supabaseConfigured } from "@/lib/supabase";
 import type { Category, SchoolView } from "@/lib/types";
 import { AuthProvider, useAuth } from "@/store/auth-store";
@@ -60,10 +61,18 @@ const SYNC_LABEL: Record<SyncStatus, string> = {
 export function AppShell() {
   return (
     <AuthProvider>
+      <ThemeSync />
       <UpdateBanner />
       <Gate />
     </AuthProvider>
   );
+}
+
+function ThemeSync() {
+  useLayoutEffect(() => {
+    applyTheme(readTheme());
+  }, []);
+  return null;
 }
 
 function Gate() {
@@ -155,7 +164,7 @@ function MainApp({ me }: { me: string }) {
               </p>
             </div>
             <div className="flex items-center gap-2">
-              <div className="hidden rounded-xl border border-border/80 bg-white p-1 shadow-sm sm:flex">
+              <div className="hidden rounded-xl border border-border/80 bg-card p-1 shadow-sm sm:flex">
                 {categories.map((c) => (
                   <CategoryTab
                     key={c.id}
@@ -170,8 +179,8 @@ function MainApp({ me }: { me: string }) {
                 onClick={() => setShowAccount(true)}
                 className={`relative flex size-11 items-center justify-center rounded-full border text-sm font-medium shadow-sm transition-colors ${
                   showAccount
-                    ? "border-ink bg-ink text-white"
-                    : "border-border/80 bg-white text-ink hover:bg-slate-50"
+                    ? "border-chip bg-chip text-chip-foreground"
+                    : "border-border/80 bg-card text-ink hover:bg-soft"
                 }`}
                 aria-label="帳號與連結"
               >
@@ -212,7 +221,7 @@ function MainApp({ me }: { me: string }) {
 
             {activeCategory === "school" && (
               <nav
-                className="animate-fade-up -mx-4 mt-6 flex gap-1 overflow-x-auto px-4 sm:mx-0 sm:rounded-2xl sm:border sm:border-border/70 sm:bg-white sm:p-1.5 sm:shadow-sm"
+                className="animate-fade-up -mx-4 mt-6 flex gap-1 overflow-x-auto px-4 sm:mx-0 sm:rounded-2xl sm:border sm:border-border/70 sm:bg-card sm:p-1.5 sm:shadow-sm"
                 style={{ animationDelay: "60ms" }}
                 aria-label="學校導覽"
               >
@@ -226,8 +235,8 @@ function MainApp({ me }: { me: string }) {
                       onClick={() => goView(item.id)}
                       className={`flex shrink-0 items-center justify-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-medium transition-all sm:flex-1 sm:gap-2 sm:rounded-xl sm:border-transparent sm:px-3 sm:py-2.5 ${
                         active
-                          ? "border-ink bg-ink text-white shadow-sm"
-                          : "border-border/80 bg-white text-muted-foreground hover:bg-slate-100 hover:text-ink"
+                          ? "border-chip bg-chip text-chip-foreground shadow-sm"
+                          : "border-border/80 bg-card text-muted-foreground hover:bg-wash hover:text-ink"
                       }`}
                     >
                       <Icon className="size-4" />
@@ -275,7 +284,7 @@ function MainApp({ me }: { me: string }) {
       </div>
 
       <nav
-        className="fixed inset-x-0 bottom-0 z-40 border-t border-border/80 bg-white px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 sm:hidden"
+        className="fixed inset-x-0 bottom-0 z-40 border-t border-border/80 bg-card px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 sm:hidden"
         aria-label="手機導覽"
       >
         <div className="mx-auto flex max-w-lg justify-between gap-1">
@@ -288,7 +297,7 @@ function MainApp({ me }: { me: string }) {
                 type="button"
                 onClick={() => goCategory(item.id)}
                 className={`flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-lg px-1 py-1.5 text-[11px] font-medium transition-colors ${
-                  active ? "text-teal-800" : "text-muted-foreground"
+                  active ? "text-primary" : "text-muted-foreground"
                 }`}
                 aria-current={active ? "page" : undefined}
               >
@@ -417,8 +426,8 @@ function ViewerChip({
       onClick={onClick}
       className={`shrink-0 rounded-full border px-3 py-1 text-sm transition-colors ${
         active
-          ? "border-ink bg-ink text-white"
-          : "border-border/80 bg-white text-muted-foreground hover:text-ink"
+          ? "border-chip bg-chip text-chip-foreground"
+          : "border-border/80 bg-card text-muted-foreground hover:text-ink"
       }`}
     >
       {label}
@@ -440,7 +449,7 @@ function CategoryTab({
       type="button"
       onClick={onClick}
       className={`rounded-lg px-4 py-2 text-sm font-medium transition-all ${
-        active ? "bg-ink text-white shadow-sm" : "text-muted-foreground hover:text-ink"
+        active ? "bg-chip text-chip-foreground shadow-sm" : "text-muted-foreground hover:text-ink"
       }`}
     >
       {label}

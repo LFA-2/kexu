@@ -149,7 +149,7 @@ function AllocationCard({
     >
       <div className="grid grid-cols-3 gap-2">
         {CASTLE_NAMES.map((name, i) => (
-          <div key={name} className="space-y-3 rounded-xl bg-slate-50 p-2.5 text-center">
+          <div key={name} className="space-y-3 rounded-xl bg-soft p-2.5 text-center">
             <p className="text-sm font-medium text-ink">{name}</p>
             <Stepper
               label={`${name}攻擊`}
@@ -232,7 +232,7 @@ function AllocationSummary({ move }: { move: BlottoMove }) {
   return (
     <div className="grid grid-cols-3 gap-2 text-center">
       {CASTLE_NAMES.map((name, i) => (
-        <div key={name} className="rounded-xl bg-slate-50 p-2.5">
+        <div key={name} className="rounded-xl bg-soft p-2.5">
           <p className="text-sm font-medium text-ink">{name}</p>
           <p className="mt-1 text-xs text-muted-foreground">
             攻 {move.attack[i]}・守 {move.defense[i]}
@@ -291,14 +291,14 @@ function ResultList({
   rows: { name: string; numbers: string; good: boolean; text: string }[];
 }) {
   return (
-    <div className="rounded-xl bg-slate-50 p-3">
+    <div className="rounded-xl bg-soft p-3">
       <p className="text-xs text-muted-foreground">{title}</p>
       <ul className="mt-2 space-y-1.5">
         {rows.map((r) => (
           <li key={r.name} className="flex items-center justify-between text-sm">
             <span className="text-ink">{r.name}</span>
             <span className="tabular-nums text-muted-foreground">{r.numbers}</span>
-            <span className={`w-12 text-right font-medium ${r.good ? "text-teal-700" : "text-rose-700"}`}>
+            <span className={`w-12 text-right font-medium ${r.good ? "text-primary" : "text-destructive"}`}>
               {r.text}
             </span>
           </li>

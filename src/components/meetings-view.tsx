@@ -92,7 +92,7 @@ export function MeetingsView({ people, onBack }: { people: Person[]; onBack: () 
             <select
               value={partner}
               onChange={(e) => setPartner(e.target.value)}
-              className="h-8 rounded-lg border border-input bg-white px-2 text-sm"
+              className="h-8 rounded-lg border border-input bg-card px-2 text-sm"
               aria-label="和誰開會"
             >
               {others.map((p) => (
@@ -113,7 +113,7 @@ export function MeetingsView({ people, onBack }: { people: Person[]; onBack: () 
       {meetings === null ? (
         <p className="py-10 text-center text-sm text-muted-foreground">載入中…</p>
       ) : meetings.length === 0 ? (
-        <p className="rounded-2xl border border-dashed border-border bg-white px-4 py-12 text-center text-sm text-muted-foreground">
+        <p className="rounded-2xl border border-dashed border-border bg-card px-4 py-12 text-center text-sm text-muted-foreground">
           還沒有會議紀錄
         </p>
       ) : (
@@ -126,7 +126,7 @@ export function MeetingsView({ people, onBack }: { people: Person[]; onBack: () 
                 <button
                   type="button"
                   onClick={() => setOpenId(m.id)}
-                  className="flex w-full items-center gap-3 rounded-xl border border-border/70 bg-white px-4 py-3 text-left hover:border-slate-300"
+                  className="flex w-full items-center gap-3 rounded-xl border border-border/70 bg-card px-4 py-3 text-left hover:border-slate-300"
                 >
                   <span className="w-14 shrink-0 text-center">
                     <span className="block font-display text-xl text-ink">{format(parseISO(m.date), "M/d")}</span>
@@ -299,7 +299,7 @@ function MeetingEditor({ id, people, onBack }: { id: number; people: Person[]; o
         </p>
       )}
 
-      <section className="grid gap-3 rounded-2xl border border-border/70 bg-white p-4 sm:p-5">
+      <section className="grid gap-3 rounded-2xl border border-border/70 bg-card p-4 sm:p-5">
         <Input
           value={local.title}
           onChange={(e) => edit("title", e.target.value.slice(0, 100))}
@@ -326,7 +326,7 @@ function MeetingEditor({ id, people, onBack }: { id: number; people: Person[]; o
       <TextSection label="討論內容" hint="兩人都可以同時寫，大約每 6 秒同步一次" value={local.notes} rows={8} editable={editable} onChange={(v) => edit("notes", v.slice(0, 50000))} placeholder="記下討論的重點…" />
       <TextSection label="決議" value={local.decisions} rows={3} editable={editable} onChange={(v) => edit("decisions", v.slice(0, 20000))} placeholder="最後決定了什麼" />
 
-      <section className="rounded-2xl border border-border/70 bg-white p-4 sm:p-5">
+      <section className="rounded-2xl border border-border/70 bg-card p-4 sm:p-5">
         <h3 className="font-display text-lg text-ink">待辦事項</h3>
         <p className="mb-3 text-xs text-muted-foreground">指派給某人後，會出現在那個人的「今日」頁</p>
         <ul className="space-y-2">
@@ -347,7 +347,7 @@ function MeetingEditor({ id, people, onBack }: { id: number; people: Person[]; o
                 onChange={(e) =>
                   changeActions((list) => list.map((x) => (x.id === a.id ? { ...x, assignee: e.target.value || null } : x)))
                 }
-                className="h-7 rounded-md border border-input bg-white px-1.5 text-xs"
+                className="h-7 rounded-md border border-input bg-card px-1.5 text-xs"
               >
                 <option value="">未指派</option>
                 {participants.map((p) => (
@@ -438,7 +438,7 @@ function TextSection({
   placeholder?: string;
 }) {
   return (
-    <section className="rounded-2xl border border-border/70 bg-white p-4 sm:p-5">
+    <section className="rounded-2xl border border-border/70 bg-card p-4 sm:p-5">
       <Label className="font-display text-lg text-ink">{label}</Label>
       {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
       <Textarea

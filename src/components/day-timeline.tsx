@@ -106,11 +106,11 @@ export function DayTimeline({
       </div>
 
       <div className="relative my-1 h-3.5">
-        <div className="absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-slate-200" />
+        <div className="absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-muted" />
         {ticks.map((h) => (
           <span
             key={h}
-            className="absolute top-1/2 h-2.5 w-px -translate-y-1/2 bg-slate-300"
+            className="absolute top-1/2 h-2.5 w-px -translate-y-1/2 bg-border"
             style={{ left: x(h * 60) }}
           />
         ))}
@@ -128,7 +128,7 @@ export function DayTimeline({
         {points.map((p) => (
           <span
             key={p.id}
-            className="absolute top-1/2 size-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] bg-white"
+            className="absolute top-1/2 size-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] bg-card"
             style={{ left: x(itemMinutes(p)[0]), borderColor: color }}
             title={`${p.label} ${p.start}`}
           />

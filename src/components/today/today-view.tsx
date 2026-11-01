@@ -361,13 +361,13 @@ export function TodayView({ me, isMine, color }: { me: string; isMine: boolean; 
   const isPast = date < todayKey;
 
   const modeToggle = (
-    <div className="flex rounded-xl border border-border/80 bg-white p-0.5 shadow-sm">
+    <div className="flex rounded-xl border border-border/80 bg-card p-0.5 shadow-sm">
       {(["day", "week"] as const).map((m) => (
         <button
           key={m}
           type="button"
           onClick={() => setMode(m)}
-          className={`rounded-lg px-3 py-1 text-sm font-medium ${mode === m ? "bg-ink text-white" : "text-muted-foreground hover:text-ink"}`}
+          className={`rounded-lg px-3 py-1 text-sm font-medium ${mode === m ? "bg-chip text-chip-foreground" : "text-muted-foreground hover:text-ink"}`}
           aria-pressed={mode === m}
         >
           {m === "day" ? "今日" : "本週"}
@@ -416,7 +416,7 @@ export function TodayView({ me, isMine, color }: { me: string; isMine: boolean; 
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {modeToggle}
-          <div className="flex items-center rounded-xl border border-border/80 bg-white p-0.5 shadow-sm">
+          <div className="flex items-center rounded-xl border border-border/80 bg-card p-0.5 shadow-sm">
             <Button variant="ghost" size="icon-sm" onClick={() => setDate(toDateKey(addDays(parseISO(date), -1)))} aria-label="前一天">
               <ChevronLeft />
             </Button>
@@ -445,7 +445,7 @@ export function TodayView({ me, isMine, color }: { me: string; isMine: boolean; 
         </div>
       </header>
 
-      <section className="rounded-2xl border border-border/70 bg-white p-4 sm:p-5">
+      <section className="rounded-2xl border border-border/70 bg-card p-4 sm:p-5">
         <h3 className="font-display text-lg text-ink">行程</h3>
         {daySchedule.length === 0 && (
           <p className="mt-1 text-sm text-muted-foreground">這天沒有行程</p>
@@ -455,7 +455,7 @@ export function TodayView({ me, isMine, color }: { me: string; isMine: boolean; 
         </div>
       </section>
 
-      <section className="grid gap-4 rounded-2xl border border-border/70 bg-white p-4 sm:grid-cols-[auto_1fr] sm:p-5">
+      <section className="grid gap-4 rounded-2xl border border-border/70 bg-card p-4 sm:grid-cols-[auto_1fr] sm:p-5">
         <div className="flex items-center gap-4 sm:flex-col sm:items-center">
           <ProgressRing pct={completion ?? 0} label={date === todayKey ? "今日完成" : "當日完成"} />
           <div className="text-sm sm:text-center">
@@ -507,11 +507,11 @@ export function TodayView({ me, isMine, color }: { me: string; isMine: boolean; 
           )}
         </div>
         {!plan ? (
-          <p className="rounded-2xl border border-dashed border-border bg-white px-4 py-10 text-center text-sm text-muted-foreground">
+          <p className="rounded-2xl border border-dashed border-border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
             {readOnly || isPast ? "這天沒有計畫" : "正在排…"}
           </p>
         ) : items.length === 0 && classes.length === 0 ? (
-          <p className="rounded-2xl border border-dashed border-border bg-white px-4 py-10 text-center text-sm text-muted-foreground">
+          <p className="rounded-2xl border border-dashed border-border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
             這天沒有需要做的事 🎉 可以按「新增」加入自己的安排
           </p>
         ) : (
@@ -608,11 +608,11 @@ function Timeline({
         r.type === "class" ? (
           <li
             key={`c${k}`}
-            className="flex items-center gap-3 rounded-xl border border-dashed border-border/80 bg-slate-50/70 px-3 py-2 text-sm"
+            className="flex items-center gap-3 rounded-xl border border-dashed border-border/80 bg-soft/70 px-3 py-2 text-sm"
           >
             <span className="w-11 shrink-0 tabular-nums text-muted-foreground">{r.cls.start}</span>
             {r.cls.point ? (
-              <span className="mx-[-2px] size-2 rounded-full border-2 bg-white" style={{ borderColor: r.cls.color }} />
+              <span className="mx-[-2px] size-2 rounded-full border-2 bg-card" style={{ borderColor: r.cls.color }} />
             ) : (
               <span className="h-6 w-1 rounded-full" style={{ backgroundColor: r.cls.color }} />
             )}
@@ -687,7 +687,7 @@ function ItemRow({
 
   return (
     <li
-      className={`rounded-xl border bg-white px-3 py-3 transition-colors ${done ? "border-border/50 bg-slate-50/60" : "border-border/70"}`}
+      className={`rounded-xl border bg-card px-3 py-3 transition-colors ${done ? "border-border/50 bg-soft/60" : "border-border/70"}`}
     >
       <div className="flex items-start gap-3">
         <span className="w-11 shrink-0 pt-0.5 text-sm tabular-nums text-muted-foreground">
@@ -734,7 +734,7 @@ function ItemRow({
               />
               {target !== null && target < 100 && (
                 <span
-                  className="pointer-events-none absolute top-1/2 h-4 w-0.5 -translate-y-1/2 rounded bg-ink"
+                  className="pointer-events-none absolute top-1/2 h-4 w-0.5 -translate-y-1/2 rounded bg-chip"
                   style={{ left: `calc(${target}% - 1px)` }}
                   title={`今天目標 ${target}%`}
                 />
@@ -868,7 +868,7 @@ function AddDialog({
               key={t}
               type="button"
               onClick={() => setTab(t)}
-              className={`flex-1 rounded-md py-1 text-sm ${tab === t ? "bg-ink text-white" : "text-muted-foreground"}`}
+              className={`flex-1 rounded-md py-1 text-sm ${tab === t ? "bg-chip text-chip-foreground" : "text-muted-foreground"}`}
             >
               {t === "school" ? "作業・讀書" : "自訂"}
             </button>
@@ -887,7 +887,7 @@ function AddDialog({
                     setPick(w.refId);
                     setMinutes(Math.min(Math.round(w.remaining / 15) * 15 || 15, 120));
                   }}
-                  className={`w-full rounded-lg px-3 py-2 text-left ${pick === w.refId ? "bg-slate-100 ring-1 ring-ink" : "hover:bg-slate-50"}`}
+                  className={`w-full rounded-lg px-3 py-2 text-left ${pick === w.refId ? "bg-wash ring-1 ring-ink" : "hover:bg-soft"}`}
                 >
                   <span className="block text-sm text-ink">{w.title}</span>
                   <span className="block text-xs text-muted-foreground">

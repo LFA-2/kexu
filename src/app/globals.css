@@ -8,6 +8,10 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-ink: var(--ink);
+  --color-chip: var(--chip);
+  --color-chip-foreground: var(--chip-foreground);
+  --color-soft: var(--soft);
+  --color-wash: var(--wash);
   --font-sans: var(--font-sans);
   --font-display: var(--font-display);
   --font-heading: var(--font-display);
@@ -54,7 +58,7 @@
   --background: #e9eef2;
   --foreground: #14212b;
   --ink: #14212b;
-  --card: #f7fafc;
+  --card: #ffffff;
   --card-foreground: #14212b;
   --popover: #f7fafc;
   --popover-foreground: #14212b;
@@ -84,6 +88,192 @@
   --sidebar-accent-foreground: #134e4a;
   --sidebar-border: #c9d4de;
   --sidebar-ring: #0f766e;
+  --chip: #14212b;
+  --chip-foreground: #ffffff;
+  --soft: #f8fafc;
+  --wash: #f1f5f9;
+  color-scheme: light;
+}
+
+/* Theme ids match src/lib/themes.ts. "default" is :root with no data-theme. */
+[data-theme="black"] {
+  color-scheme: dark;
+  --background: #0c0f12;
+  --foreground: #f3f7fa;
+  --ink: #f3f7fa;
+  --card: #171c21;
+  --card-foreground: #f3f7fa;
+  --popover: #1c232a;
+  --popover-foreground: #f3f7fa;
+  --primary: #2dd4bf;
+  --primary-foreground: #042f2e;
+  --secondary: #24303a;
+  --secondary-foreground: #f3f7fa;
+  --muted: #24303a;
+  --muted-foreground: #9aabba;
+  --accent: #134e4a;
+  --accent-foreground: #ccfbf1;
+  --destructive: #fb7185;
+  --border: #2c3842;
+  --input: #3a4854;
+  --ring: #2dd4bf;
+  --chip: #2dd4bf;
+  --chip-foreground: #042f2e;
+  --soft: #1c242c;
+  --wash: #24303a;
+  --chart-1: #2dd4bf;
+  --chart-2: #fb923c;
+  --chart-3: #93c5fd;
+  --chart-4: #bef264;
+  --chart-5: #fb7185;
+  --sidebar: #171c21;
+  --sidebar-foreground: #f3f7fa;
+  --sidebar-primary: #2dd4bf;
+  --sidebar-primary-foreground: #042f2e;
+  --sidebar-accent: #134e4a;
+  --sidebar-accent-foreground: #ccfbf1;
+  --sidebar-border: #2c3842;
+  --sidebar-ring: #2dd4bf;
+}
+
+[data-theme="white"] {
+  color-scheme: light;
+  --background: #f5f7f6;
+  --foreground: #111111;
+  --ink: #111111;
+  --card: #ffffff;
+  --card-foreground: #111111;
+  --popover: #ffffff;
+  --popover-foreground: #111111;
+  --primary: #06c755;
+  --primary-foreground: #ffffff;
+  --secondary: #dce8e1;
+  --secondary-foreground: #111111;
+  --muted: #dce8e1;
+  --muted-foreground: #5c6660;
+  --accent: #e5f8ec;
+  --accent-foreground: #067a36;
+  --destructive: #be123c;
+  --border: #d9e0dc;
+  --input: #d9e0dc;
+  --ring: #06c755;
+  --chip: #06c755;
+  --chip-foreground: #ffffff;
+  --soft: #f7faf8;
+  --wash: #eef3f0;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #111111;
+  --sidebar-primary: #06c755;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #e5f8ec;
+  --sidebar-accent-foreground: #067a36;
+  --sidebar-border: #d9e0dc;
+  --sidebar-ring: #06c755;
+}
+
+[data-theme="ocean"] {
+  color-scheme: light;
+  --background: #eef3f8;
+  --foreground: #0f2744;
+  --ink: #0f2744;
+  --card: #ffffff;
+  --card-foreground: #0f2744;
+  --popover: #ffffff;
+  --popover-foreground: #0f2744;
+  --primary: #1d4ed8;
+  --primary-foreground: #ffffff;
+  --secondary: #e4ebf5;
+  --secondary-foreground: #0f2744;
+  --muted: #e4ebf5;
+  --muted-foreground: #4b6280;
+  --accent: #dbe7fb;
+  --accent-foreground: #1e3a8a;
+  --destructive: #be123c;
+  --border: #c9d6e8;
+  --input: #c9d6e8;
+  --ring: #1d4ed8;
+  --chip: #1d4ed8;
+  --chip-foreground: #ffffff;
+  --soft: #f5f8fc;
+  --wash: #e8eef6;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #0f2744;
+  --sidebar-primary: #1d4ed8;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #dbe7fb;
+  --sidebar-accent-foreground: #1e3a8a;
+  --sidebar-border: #c9d6e8;
+  --sidebar-ring: #1d4ed8;
+}
+
+[data-theme="sakura"] {
+  color-scheme: light;
+  --background: #fbf4f6;
+  --foreground: #4a1d2e;
+  --ink: #4a1d2e;
+  --card: #ffffff;
+  --card-foreground: #4a1d2e;
+  --popover: #ffffff;
+  --popover-foreground: #4a1d2e;
+  --primary: #db2777;
+  --primary-foreground: #ffffff;
+  --secondary: #efd0dc;
+  --secondary-foreground: #4a1d2e;
+  --muted: #efd0dc;
+  --muted-foreground: #7a4058;
+  --accent: #fce7f0;
+  --accent-foreground: #9d174d;
+  --destructive: #be123c;
+  --border: #f0d5df;
+  --input: #f0d5df;
+  --ring: #db2777;
+  --chip: #db2777;
+  --chip-foreground: #ffffff;
+  --soft: #fdf7f9;
+  --wash: #f8e8ee;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #4a1d2e;
+  --sidebar-primary: #db2777;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #fce7f0;
+  --sidebar-accent-foreground: #9d174d;
+  --sidebar-border: #f0d5df;
+  --sidebar-ring: #db2777;
+}
+
+[data-theme="grape"] {
+  color-scheme: light;
+  --background: #f4f2f8;
+  --foreground: #2e1065;
+  --ink: #2e1065;
+  --card: #ffffff;
+  --card-foreground: #2e1065;
+  --popover: #ffffff;
+  --popover-foreground: #2e1065;
+  --primary: #6d28d9;
+  --primary-foreground: #ffffff;
+  --secondary: #e2d8f1;
+  --secondary-foreground: #2e1065;
+  --muted: #e2d8f1;
+  --muted-foreground: #5c4d78;
+  --accent: #ede9fe;
+  --accent-foreground: #5b21b6;
+  --destructive: #be123c;
+  --border: #ddd6ee;
+  --input: #ddd6ee;
+  --ring: #6d28d9;
+  --chip: #6d28d9;
+  --chip-foreground: #ffffff;
+  --soft: #f8f6fb;
+  --wash: #eeeaf5;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #2e1065;
+  --sidebar-primary: #6d28d9;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #ede9fe;
+  --sidebar-accent-foreground: #5b21b6;
+  --sidebar-border: #ddd6ee;
+  --sidebar-ring: #6d28d9;
 }
 
 @layer base {
@@ -94,7 +284,7 @@
     @apply bg-background text-foreground;
   }
   html {
-    @apply font-sans;
+    @apply bg-background font-sans;
   }
 }
 
@@ -549,12 +739,12 @@
 .progress-range::-webkit-slider-runnable-track {
   height: 0.5rem;
   border-radius: 999px;
-  background: linear-gradient(to right, var(--accent) var(--fill), #e8edf2 var(--fill));
+  background: linear-gradient(to right, var(--accent) var(--fill), var(--muted) var(--fill));
 }
 .progress-range::-moz-range-track {
   height: 0.5rem;
   border-radius: 999px;
-  background: linear-gradient(to right, var(--accent) var(--fill), #e8edf2 var(--fill));
+  background: linear-gradient(to right, var(--accent) var(--fill), var(--muted) var(--fill));
 }
 .progress-range::-webkit-slider-thumb {
   -webkit-appearance: none;
