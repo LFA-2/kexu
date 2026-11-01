@@ -7,14 +7,19 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { isoWeekday, WEEKDAYS } from "@/lib/dates";
 import {
+  dayRoutineIds,
+  MODULE_TEMPLATES,
+  MUSCLE_COLORS,
+  MUSCLES,
   ROUTINE_COLORS,
   routineMinutes,
   TEMPLATE_GROUPS,
+  type Muscle,
   type Routine,
   type RoutineItem,
 } from "@/lib/fitness";
 import { useFitness } from "@/store/fitness-store";
-import { ArrowDown, ArrowLeft, ArrowUp, Pencil, Play, Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowUp, Check, Pencil, Play, Plus, Trash2 } from "lucide-react";
 
 export function RoutinesView({
   onBack,
@@ -23,20 +28,25 @@ export function RoutinesView({
   onBack: () => void;
   onStart: (routine: Routine) => void;
 }) {
-  const { routines, weekPlan, readOnly, setWeekPlan, importTemplate, allExercises, exerciseById } =
+  const { routines, weekPlan, readOnly, toggleWeekPlan, importTemplate, allExercises, exerciseById } =
     useFitness();
-  const [editing, setEditing] = useState<Routine | "new" | null>(null);
+  const [editing, setEditing] = useState<{ routine: Routine | null; preset?: Muscle } | null>(null);
 
   if (editing) {
     return (
       <RoutineEditor
-        routine={editing === "new" ? null : editing}
+        key={editing.routine?.id ?? `new-${editing.preset ?? ""}`}
+        routine={editing.routine}
+        preset={editing.preset}
         onDone={() => setEditing(null)}
       />
     );
   }
 
   const todayWd = isoWeekday(new Date());
+  const daysOf = (id: string) =>
+    [1, 2, 3, 4, 5, 6, 7].filter((d) => dayRoutineIds(weekPlan, d).includes(id));
+  const byMuscle = (m: Muscle) => routines.filter((r) => r.muscle === m);
 
   return (
     <div className="space-y-6">
@@ -46,49 +56,99 @@ export function RoutinesView({
       </Button>
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-sm text-muted-foreground">建立訓練菜單，排進每週的課表</p>
+          <p className="text-sm text-muted-foreground">每個部位一個菜單，一天可以排好幾個</p>
           <h2 className="font-display mt-1 text-2xl tracking-tight text-ink sm:text-3xl">課表</h2>
         </div>
         {!readOnly && (
-          <Button className="gap-1.5" onClick={() => setEditing("new")}>
+          <Button className="gap-1.5" onClick={() => setEditing({ routine: null })}>
             <Plus data-icon="inline-start" />
             新增菜單
           </Button>
         )}
       </header>
 
+      {!readOnly && (
+        <section className="rounded-2xl border border-border/70 bg-white p-4 sm:p-5">
+          <h3 className="font-display text-lg text-ink">依部位建立菜單</h3>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            點一個部位，會先帶入常見動作，你可以再自己增減、調整組數。
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {MUSCLES.map((m) => {
+              const have = byMuscle(m);
+              return (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setEditing({ routine: null, preset: m })}
+                  className="flex items-center gap-1.5 rounded-full border border-border/80 bg-white px-3 py-1.5 text-sm text-ink hover:bg-slate-50"
+                >
+                  <span className="size-2.5 rounded-full" style={{ backgroundColor: MUSCLE_COLORS[m] }} />
+                  {m}
+                  {have.length > 0 ? (
+                    <span className="text-[11px] text-muted-foreground">
+                      <Check className="inline size-3" />
+                      {have.length > 1 ? have.length : ""}
+                    </span>
+                  ) : (
+                    <Plus className="size-3 text-muted-foreground" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
       <section className="rounded-2xl border border-border/70 bg-white p-4 sm:p-5">
-        <h3 className="font-display mb-3 text-lg text-ink">每週課表</h3>
-        <ul className="divide-y divide-border/50">
+        <h3 className="font-display text-lg text-ink">每週課表</h3>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          {readOnly ? "每天排了哪些菜單" : "每天可以點選多個菜單，例如週一：胸＋肩＋背。沒選就是休息日。"}
+        </p>
+        <ul className="mt-2 divide-y divide-border/50">
           {[1, 2, 3, 4, 5, 6, 7].map((d) => {
-            const r = routines.find((x) => x.id === weekPlan[String(d)]);
+            const ids = dayRoutineIds(weekPlan, d);
+            const chosen = ids.flatMap((id) => routines.filter((x) => x.id === id));
+            const mins = chosen.reduce((a, r) => a + routineMinutes(r, allExercises), 0);
             return (
-              <li key={d} className="flex items-center gap-3 py-2">
+              <li key={d} className="flex items-start gap-3 py-2.5">
                 <span
-                  className={`w-12 shrink-0 text-sm ${d === todayWd ? "font-medium text-ink" : "text-muted-foreground"}`}
+                  className={`w-12 shrink-0 pt-1 text-sm ${d === todayWd ? "font-medium text-ink" : "text-muted-foreground"}`}
                 >
                   週{WEEKDAYS[d - 1]}
                   {d === todayWd && <span className="ml-0.5 text-[10px]">今</span>}
                 </span>
-                {readOnly ? (
-                  <span className="text-sm text-ink">{r?.name ?? "休息"}</span>
-                ) : (
-                  <select
-                    value={r?.id ?? ""}
-                    onChange={(e) => setWeekPlan(d, e.target.value || null)}
-                    className="h-8 min-w-0 flex-1 rounded-lg border border-input bg-white px-2 text-sm"
-                  >
-                    <option value="">休息</option>
-                    {routines.map((x) => (
-                      <option key={x.id} value={x.id}>
-                        {x.name}
-                      </option>
-                    ))}
-                  </select>
-                )}
-                {r && (
-                  <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: r.color }} />
-                )}
+                <div className="min-w-0 flex-1">
+                  {readOnly || routines.length === 0 ? (
+                    <p className="pt-1 text-sm text-ink">
+                      {chosen.length ? chosen.map((r) => r.name).join("＋") : "休息"}
+                    </p>
+                  ) : (
+                    <div className="flex flex-wrap gap-1.5">
+                      {routines.map((r) => {
+                        const on = ids.includes(r.id);
+                        return (
+                          <button
+                            key={r.id}
+                            type="button"
+                            aria-pressed={on}
+                            onClick={() => toggleWeekPlan(d, r.id)}
+                            className={`whitespace-nowrap rounded-full border px-2.5 py-1 text-xs transition-colors ${
+                              on ? "text-white" : "border-border/80 bg-white text-muted-foreground hover:text-ink"
+                            }`}
+                            style={on ? { backgroundColor: r.color, borderColor: r.color } : undefined}
+                          >
+                            {on && <Check className="mr-0.5 inline size-3" />}
+                            {r.name}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+                <span className="shrink-0 pt-1 text-xs tabular-nums text-muted-foreground">
+                  {chosen.length ? `約 ${mins} 分` : "休息"}
+                </span>
               </li>
             );
           })}
@@ -99,7 +159,7 @@ export function RoutinesView({
         <h3 className="font-display text-lg text-ink">訓練菜單</h3>
         {routines.length === 0 && (
           <p className="rounded-2xl border border-dashed border-border bg-white px-4 py-8 text-center text-sm text-muted-foreground">
-            還沒有菜單，可以自己建立或從下方範本開始
+            還沒有菜單，可以從上面挑部位建立，或從下方範本開始
           </p>
         )}
         {routines.map((r) => (
@@ -110,15 +170,19 @@ export function RoutinesView({
             <div className="h-1.5" style={{ backgroundColor: r.color }} />
             <div className="p-4">
               <div className="flex items-start justify-between gap-2">
-                <div>
-                  <h4 className="font-display text-lg text-ink">{r.name}</h4>
+                <div className="min-w-0">
+                  <h4 className="font-display flex flex-wrap items-center gap-2 text-lg text-ink">
+                    {r.name}
+                    {r.muscle && r.muscle !== r.name && (
+                      <span className="rounded-full bg-slate-100 px-2 py-0.5 font-sans text-[11px] text-muted-foreground">
+                        {r.muscle}
+                      </span>
+                    )}
+                  </h4>
                   <p className="text-xs text-muted-foreground">
                     {r.items.length} 個動作・約 {routineMinutes(r, allExercises)} 分
-                    {Object.entries(weekPlan).filter(([, v]) => v === r.id).length > 0 &&
-                      `・每週${Object.entries(weekPlan)
-                        .filter(([, v]) => v === r.id)
-                        .map(([d]) => WEEKDAYS[Number(d) - 1])
-                        .join("、")}`}
+                    {daysOf(r.id).length > 0 &&
+                      `・每週${daysOf(r.id).map((d) => WEEKDAYS[d - 1]).join("、")}`}
                   </p>
                 </div>
                 <div className="flex gap-1">
@@ -132,7 +196,7 @@ export function RoutinesView({
                         variant="ghost"
                         size="icon-sm"
                         className="text-muted-foreground"
-                        onClick={() => setEditing(r)}
+                        onClick={() => setEditing({ routine: r })}
                         aria-label="編輯菜單"
                       >
                         <Pencil />
@@ -171,7 +235,7 @@ export function RoutinesView({
                   size="sm"
                   className="mt-3 w-full"
                   onClick={() => {
-                    if (confirm(`加入「${g.name}」的菜單並排進每週課表？（會覆蓋那幾天原本的安排）`))
+                    if (confirm(`加入「${g.name}」的菜單並排進每週課表？（會加在那幾天原本的安排後面）`))
                       importTemplate(i);
                   }}
                 >
@@ -191,14 +255,27 @@ export function itemSummary(it: RoutineItem, kind: "strength" | "cardio" | undef
   return `${it.sets ?? 3} × ${it.reps ?? 10}${it.weight ? `・${it.weight} kg` : ""}`;
 }
 
-function RoutineEditor({ routine, onDone }: { routine: Routine | null; onDone: () => void }) {
+function RoutineEditor({
+  routine,
+  preset,
+  onDone,
+}: {
+  routine: Routine | null;
+  preset?: Muscle;
+  onDone: () => void;
+}) {
   const { saveRoutine, removeRoutine, exerciseById, routines } = useFitness();
-  const [name, setName] = useState(routine?.name ?? "");
+  const [name, setName] = useState(routine?.name ?? preset ?? "");
+  const [muscle, setMuscle] = useState<Muscle | "">(routine?.muscle ?? preset ?? "");
   const [color, setColor] = useState(
-    routine?.color ?? ROUTINE_COLORS[routines.length % ROUTINE_COLORS.length],
+    routine?.color ??
+      (preset ? MUSCLE_COLORS[preset] : ROUTINE_COLORS[routines.length % ROUTINE_COLORS.length]),
   );
   const [note, setNote] = useState(routine?.note ?? "");
-  const [items, setItems] = useState<RoutineItem[]>(routine?.items ?? []);
+  const [items, setItems] = useState<RoutineItem[]>(
+    routine?.items ?? (preset ? MODULE_TEMPLATES[preset].map((x) => ({ ...x })) : []),
+  );
+  const colors = [...new Set([...ROUTINE_COLORS, ...Object.values(MUSCLE_COLORS)])];
   const [picking, setPicking] = useState(false);
 
   const patch = (i: number, p: Partial<RoutineItem>) =>
@@ -214,7 +291,14 @@ function RoutineEditor({ routine, onDone }: { routine: Routine | null; onDone: (
 
   function save() {
     if (!name.trim()) return;
-    saveRoutine({ id: routine?.id, name: name.trim().slice(0, 40), color, note: note.trim(), items });
+    saveRoutine({
+      id: routine?.id,
+      name: name.trim().slice(0, 40),
+      color,
+      ...(muscle ? { muscle } : {}),
+      note: note.trim(),
+      items,
+    });
     onDone();
   }
 
@@ -226,15 +310,37 @@ function RoutineEditor({ routine, onDone }: { routine: Routine | null; onDone: (
         <ArrowLeft data-icon="inline-start" />
         返回課表
       </Button>
-      <h2 className="font-display text-2xl tracking-tight text-ink">{routine ? "編輯菜單" : "新增菜單"}</h2>
+      <h2 className="font-display text-2xl tracking-tight text-ink">
+        {routine ? "編輯菜單" : preset ? `新增「${preset}」菜單` : "新增菜單"}
+      </h2>
 
       <div className="grid gap-4 rounded-2xl border border-border/70 bg-white p-4">
         <div className="grid gap-2">
           <Label htmlFor="rt-name">名稱</Label>
-          <Input id="rt-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="例如：上半身" maxLength={40} />
+          <Input id="rt-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="例如：胸、背、有氧" maxLength={40} />
         </div>
-        <div className="flex gap-2">
-          {ROUTINE_COLORS.map((c) => (
+        <div className="grid gap-2">
+          <Label>部位</Label>
+          <div className="flex flex-wrap gap-1.5">
+            {(["", ...MUSCLES] as const).map((m) => (
+              <button
+                key={m || "none"}
+                type="button"
+                onClick={() => {
+                  setMuscle(m);
+                  if (m && !routine) setColor(MUSCLE_COLORS[m]);
+                }}
+                className={`whitespace-nowrap rounded-full border px-2.5 py-1 text-xs ${
+                  muscle === m ? "border-ink bg-ink text-white" : "border-border/80 text-muted-foreground"
+                }`}
+              >
+                {m || "不分"}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {colors.map((c) => (
             <button
               key={c}
               type="button"

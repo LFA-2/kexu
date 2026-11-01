@@ -28,6 +28,8 @@ export type Routine = {
   id: string;
   name: string;
   color: string;
+  /** Body part this module trains (optional) */
+  muscle?: Muscle;
   items: RoutineItem[];
   note: string;
   createdAt: string;
@@ -66,8 +68,8 @@ export type BodyLog = { weight?: number; fat?: number };
 export type FitnessState = {
   exercises: Exercise[];
   routines: Routine[];
-  /** "1".."7" (Mon..Sun) → routine id */
-  weekPlan: Record<string, string>;
+  /** "1".."7" (Mon..Sun) → routine ids for that day (older data: a single id) */
+  weekPlan: Record<string, string[] | string>;
   sessions: Session[];
   body: Record<string, BodyLog>;
   restSec?: number;
@@ -158,6 +160,19 @@ export const BUILTIN_EXERCISES: Exercise[] = [
   c("stairs", "爬樓梯"),
 ];
 
+/** Routine ids planned for a weekday (1 = Monday). Accepts the older single-id format. */
+export function dayRoutineIds(weekPlan: FitnessState["weekPlan"], day: number): string[] {
+  const v = weekPlan[String(day)];
+  return Array.isArray(v) ? v : typeof v === "string" && v ? [v] : [];
+}
+
+export function dayRoutines(state: Pick<FitnessState, "weekPlan" | "routines">, day: number): Routine[] {
+  return dayRoutineIds(state.weekPlan, day).flatMap((id) => {
+    const r = state.routines.find((x) => x.id === id);
+    return r ? [r] : [];
+  });
+}
+
 export const ROUTINE_COLORS = ["#0F766E", "#1E3A5F", "#C2410C", "#9F1239", "#3F6212", "#4338CA"];
 
 export type RoutineTemplate = { name: string; note: string; items: RoutineItem[] };
@@ -172,6 +187,31 @@ const ca = (id: string, minutes: number, distance?: number): RoutineItem => ({
   minutes,
   ...(distance ? { distance } : {}),
 });
+
+export const MUSCLE_COLORS: Record<Muscle, string> = {
+  胸: "#0F766E",
+  背: "#1E3A5F",
+  腿: "#C2410C",
+  臀: "#9F1239",
+  肩: "#4338CA",
+  手臂: "#3F6212",
+  核心: "#0E7490",
+  全身: "#475569",
+  有氧: "#B45309",
+};
+
+/** Starting point for a body-part module; the user edits it before saving. */
+export const MODULE_TEMPLATES: Record<Muscle, RoutineItem[]> = {
+  胸: [st("bench", 4, 8), st("incline_bench", 3, 10), st("db_fly", 3, 12), st("pushup", 3, 15)],
+  背: [st("pullup", 3, 8), st("lat_pulldown", 3, 10), st("row", 3, 10), st("cable_row", 3, 12)],
+  腿: [st("squat", 4, 8), st("leg_press", 3, 12), st("leg_curl", 3, 12), st("calf", 4, 15)],
+  臀: [st("hip_thrust", 4, 10), st("rdl", 3, 10), st("lunge", 3, 10)],
+  肩: [st("ohp", 4, 8), st("lateral", 3, 15), st("face_pull", 3, 15)],
+  手臂: [st("curl", 3, 12), st("hammer", 3, 12), st("pushdown", 3, 12), st("skull", 3, 10)],
+  核心: [st("plank", 3, 45), st("crunch", 3, 20), st("leg_raise", 3, 12)],
+  全身: [st("deadlift", 3, 5), st("kb_swing", 3, 15), st("burpee", 3, 10)],
+  有氧: [ca("run", 30, 4)],
+};
 
 export const TEMPLATE_GROUPS: { name: string; desc: string; routines: RoutineTemplate[]; days: number[][] }[] = [
   {

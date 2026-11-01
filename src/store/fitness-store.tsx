@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useMemo, type ReactNode } from "react";
 import {
   BUILTIN_EXERCISES,
+  dayRoutineIds,
   EMPTY_FITNESS,
   isFitnessState,
   ROUTINE_COLORS,
@@ -27,7 +28,8 @@ type FitnessStore = FitnessState & {
   removeExercise: (id: string) => void;
   saveRoutine: (routine: Omit<Routine, "id" | "createdAt"> & { id?: string }) => void;
   removeRoutine: (id: string) => void;
-  setWeekPlan: (day: number, routineId: string | null) => void;
+  /** Add or remove one routine from a weekday. */
+  toggleWeekPlan: (day: number, routineId: string) => void;
   importTemplate: (index: number) => void;
   saveSession: (session: Session) => void;
   removeSession: (id: string) => void;
@@ -107,16 +109,23 @@ export function FitnessProvider({
       mutate((prev) => ({
         ...prev,
         routines: prev.routines.filter((r) => r.id !== id),
-        weekPlan: Object.fromEntries(Object.entries(prev.weekPlan).filter(([, v]) => v !== id)),
+        weekPlan: Object.fromEntries(
+          [1, 2, 3, 4, 5, 6, 7].flatMap((d) => {
+            const ids = dayRoutineIds(prev.weekPlan, d).filter((x) => x !== id);
+            return ids.length ? [[String(d), ids]] : [];
+          }),
+        ),
       })),
     [mutate],
   );
 
-  const setWeekPlan = useCallback(
-    (day: number, routineId: string | null) =>
+  const toggleWeekPlan = useCallback(
+    (day: number, routineId: string) =>
       mutate((prev) => {
         const weekPlan = { ...prev.weekPlan };
-        if (routineId) weekPlan[String(day)] = routineId;
+        const ids = dayRoutineIds(prev.weekPlan, day);
+        const next = ids.includes(routineId) ? ids.filter((x) => x !== routineId) : [...ids, routineId];
+        if (next.length) weekPlan[String(day)] = next;
         else delete weekPlan[String(day)];
         return { ...prev, weekPlan };
       }),
@@ -136,7 +145,9 @@ export function FitnessProvider({
             color: ROUTINE_COLORS[(prev.routines.length + i) % ROUTINE_COLORS.length],
             createdAt: new Date().toISOString(),
           };
-          for (const d of group.days[i] ?? []) weekPlan[String(d)] = r.id;
+          for (const d of group.days[i] ?? []) {
+            weekPlan[String(d)] = [...dayRoutineIds(weekPlan, d), r.id];
+          }
           return r;
         });
         return { ...prev, routines: [...prev.routines, ...created], weekPlan };
@@ -189,7 +200,7 @@ export function FitnessProvider({
     removeExercise,
     saveRoutine,
     removeRoutine,
-    setWeekPlan,
+    toggleWeekPlan,
     importTemplate,
     saveSession,
     removeSession,

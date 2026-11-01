@@ -1,6 +1,6 @@
 import { addDays, differenceInCalendarDays, parseISO } from "date-fns";
 import { formatShortDate, isoWeekday, toDateKey } from "@/lib/dates";
-import { routineMinutes, type Exercise, type FitnessState } from "@/lib/fitness";
+import { dayRoutines, routineMinutes, type Exercise, type FitnessState } from "@/lib/fitness";
 import {
   DEFAULT_PLAN_SETTINGS,
   itemMinutes,
@@ -204,8 +204,16 @@ export function generatePlan(input: PlannerInput): DayPlan {
     }
   }
   // Workout
-  const routine = fitness?.routines.find((r) => r.id === fitness.weekPlan[String(wd)]);
-  if (routine) add("workout", routine.id, `運動：${routine.name}`, `${routine.items.length} 個動作`, routineMinutes(routine, exercises));
+  const routines = fitness ? dayRoutines(fitness, wd) : [];
+  if (routines.length) {
+    add(
+      "workout",
+      routines.map((r) => r.id).join("+"),
+      `運動：${routines.map((r) => r.name).join("、")}`,
+      `${routines.reduce((a, r) => a + r.items.length, 0)} 個動作`,
+      routines.reduce((a, r) => a + routineMinutes(r, exercises), 0),
+    );
+  }
   // Meeting actions
   for (const a of actions) {
     if (a.action.done) continue;

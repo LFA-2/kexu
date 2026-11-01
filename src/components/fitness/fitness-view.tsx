@@ -15,6 +15,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { formatShortDate, isoWeekday, toDateKey } from "@/lib/dates";
 import {
+  dayRoutineIds,
+  dayRoutines,
   formatKg,
   formatPace,
   routineMinutes,
@@ -69,9 +71,9 @@ export function FitnessView({ owner }: { owner: string }) {
       .flatMap((s) => s.entries.filter((e) => e.exerciseId === exerciseId && e.sets?.length))[0]?.sets;
   const isCardio = (id: string) => exerciseById.get(id)?.kind === "cardio";
 
-  function start(routine: Routine | null) {
+  function start(list: Routine[]) {
     if (draft && !confirm("有一個還沒完成的訓練，要放棄它並開始新的嗎？")) return;
-    go({ type: "log", session: newSession(routine, lastSets, isCardio) });
+    go({ type: "log", session: newSession(list, lastSets, isCardio) });
   }
 
   switch (screen.type) {
@@ -90,7 +92,7 @@ export function FitnessView({ owner }: { owner: string }) {
     case "finished":
       return <FinishedCard session={screen.session} prs={screen.prs} onClose={home} />;
     case "routines":
-      return <RoutinesView onBack={home} onStart={(r) => start(r)} />;
+      return <RoutinesView onBack={home} onStart={(r) => start([r])} />;
     case "history":
       return <HistoryView onBack={home} onOpen={(id) => go({ type: "session", id })} />;
     case "session":
@@ -109,7 +111,8 @@ export function FitnessView({ owner }: { owner: string }) {
 
   const now = new Date();
   const today = toDateKey(now);
-  const todayRoutine = routines.find((r) => r.id === weekPlan[String(isoWeekday(now))]);
+  const todayRoutines = dayRoutines(fitness, isoWeekday(now));
+  const plannedDays = [1, 2, 3, 4, 5, 6, 7].filter((d) => dayRoutineIds(weekPlan, d).length > 0).length;
   const doneToday = sessions.filter((s) => s.date === today);
 
   return (
@@ -138,7 +141,7 @@ export function FitnessView({ owner }: { owner: string }) {
       )}
 
       <TodayCard
-        routine={todayRoutine}
+        routines={todayRoutines}
         done={doneToday}
         readOnly={readOnly}
         onStart={start}
@@ -153,7 +156,7 @@ export function FitnessView({ owner }: { owner: string }) {
       <WeekSummary />
 
       <div className="grid gap-3 sm:grid-cols-2">
-        <Entry icon={<ClipboardList className="size-5" />} title="課表" summary={routines.length ? `${routines.length} 份菜單・本週 ${Object.keys(weekPlan).length} 天有排` : "建立菜單、排進每週"} onClick={() => go({ type: "routines" })} />
+        <Entry icon={<ClipboardList className="size-5" />} title="課表" summary={routines.length ? `${routines.length} 份菜單・每週 ${plannedDays} 天有排` : "建立菜單、排進每週"} onClick={() => go({ type: "routines" })} />
         <Entry icon={<History className="size-5" />} title="紀錄" summary={sessions.length ? `共 ${sessions.length} 次訓練` : "還沒有紀錄"} onClick={() => go({ type: "history" })} />
         <Entry icon={<BarChart3 className="size-5" />} title="分析" summary="每週趨勢、動作進步、個人紀錄" onClick={() => go({ type: "stats" })} />
         <Entry icon={<Scale className="size-5" />} title="身體數據" summary={latestWeight(fitness.body)} onClick={() => go({ type: "body" })} />
@@ -170,34 +173,61 @@ function latestWeight(body: Record<string, { weight?: number }>) {
 }
 
 function TodayCard({
-  routine,
+  routines,
   done,
   readOnly,
   onStart,
   summary,
   detail,
 }: {
-  routine: Routine | undefined;
+  routines: Routine[];
   done: Session[];
   readOnly: boolean;
-  onStart: (r: Routine | null) => void;
+  onStart: (r: Routine[]) => void;
   summary: (r: Routine) => string;
   detail: (r: Routine) => string[];
 }) {
   return (
     <section className="overflow-hidden rounded-2xl border border-border/70 bg-white">
-      {routine && <div className="h-1.5" style={{ backgroundColor: routine.color }} />}
+      {routines.length > 0 && (
+        <div className="flex h-1.5">
+          {routines.map((r) => (
+            <div key={r.id} className="flex-1" style={{ backgroundColor: r.color }} />
+          ))}
+        </div>
+      )}
       <div className="p-4 sm:p-5">
         <p className="text-xs text-muted-foreground">今天的課表</p>
-        {routine ? (
+        {routines.length > 0 ? (
           <>
-            <h3 className="font-display mt-0.5 text-xl text-ink">{routine.name}</h3>
-            <p className="text-xs text-muted-foreground">{summary(routine)}</p>
-            <ul className="mt-2 grid gap-0.5 text-sm text-ink sm:grid-cols-2">
-              {detail(routine).map((d) => (
-                <li key={d}>・{d}</li>
+            <h3 className="font-display mt-0.5 text-xl text-ink">{routines.map((r) => r.name).join("＋")}</h3>
+            <div className="mt-2 grid gap-3 sm:grid-cols-2">
+              {routines.map((r) => (
+                <div key={r.id} className="rounded-xl bg-slate-50 p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="flex items-center gap-1.5 text-sm font-medium text-ink">
+                      <span className="size-2.5 rounded-full" style={{ backgroundColor: r.color }} />
+                      {r.name}
+                    </span>
+                    {!readOnly && routines.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => onStart([r])}
+                        className="text-xs text-muted-foreground underline-offset-2 hover:text-ink hover:underline"
+                      >
+                        只練這個
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">{summary(r)}</p>
+                  <ul className="mt-1 text-xs text-ink">
+                    {detail(r).map((d) => (
+                      <li key={d}>・{d}</li>
+                    ))}
+                  </ul>
+                </div>
               ))}
-            </ul>
+            </div>
           </>
         ) : (
           <h3 className="font-display mt-0.5 text-xl text-ink">休息日</h3>
@@ -209,13 +239,13 @@ function TodayCard({
         )}
         {!readOnly && (
           <div className="mt-4 flex flex-wrap gap-2">
-            {routine && (
-              <Button className="gap-1.5" onClick={() => onStart(routine)}>
+            {routines.length > 0 && (
+              <Button className="gap-1.5" onClick={() => onStart(routines)}>
                 <Play data-icon="inline-start" />
-                開始訓練
+                {routines.length > 1 ? "全部開始" : "開始訓練"}
               </Button>
             )}
-            <Button variant="outline" className="gap-1.5" onClick={() => onStart(null)}>
+            <Button variant="outline" className="gap-1.5" onClick={() => onStart([])}>
               <Dumbbell data-icon="inline-start" />
               自由訓練
             </Button>

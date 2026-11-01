@@ -40,19 +40,19 @@ function writeDraft(owner: string, s: Session | null) {
 }
 
 export function newSession(
-  routine: Routine | null,
+  routines: Routine[],
   lastSets: (exerciseId: string) => SessionEntry["sets"] | undefined,
   isCardio: (exerciseId: string) => boolean,
 ): Session {
   return {
     id: uid("ws"),
     date: toDateKey(new Date()),
-    title: routine?.name ?? "自由訓練",
-    routineId: routine?.id,
+    title: routines.length ? routines.map((r) => r.name).join("＋") : "自由訓練",
+    routineId: routines[0]?.id,
     startedAt: new Date().toISOString(),
     durationMin: 0,
     note: "",
-    entries: (routine?.items ?? []).map((it) => {
+    entries: routines.flatMap((r) => r.items).map((it) => {
       if (isCardio(it.exerciseId)) {
         return {
           exerciseId: it.exerciseId,
