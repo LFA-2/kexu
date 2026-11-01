@@ -7,18 +7,19 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatShortDate, relativeStatus, toDateKey } from "@/lib/dates";
-import type { Todo } from "@/lib/life";
+import { formatTodoTime, type Todo } from "@/lib/life";
 import { useLife } from "@/store/life-store";
 import { ArrowLeft, Plus, Trash2 } from "lucide-react";
 
-const byWhen = (a: Todo, b: Todo) =>
-  a.date.localeCompare(b.date) || (a.time || "99").localeCompare(b.time || "99");
+const whenKey = (todo: Todo) => todo.time || todo.end || "99";
+const byWhen = (a: Todo, b: Todo) => a.date.localeCompare(b.date) || whenKey(a).localeCompare(whenKey(b));
 
 export function TodosView({ color, onBack }: { color: string; onBack: () => void }) {
   const { todos, readOnly, addTodo, toggleTodo, removeTodo } = useLife();
   const [title, setTitle] = useState("");
   const [date, setDate] = useState(() => toDateKey(new Date()));
   const [time, setTime] = useState("");
+  const [end, setEnd] = useState("");
 
   const open = todos.filter((t) => !t.done).sort(byWhen);
   const done = todos
@@ -29,9 +30,10 @@ export function TodosView({ color, onBack }: { color: string; onBack: () => void
   function submit(event: FormEvent) {
     event.preventDefault();
     if (!title.trim() || !date) return;
-    addTodo({ title, date, time });
+    addTodo({ title, date, time, end });
     setTitle("");
     setTime("");
+    setEnd("");
   }
 
   return (
@@ -51,7 +53,7 @@ export function TodosView({ color, onBack }: { color: string; onBack: () => void
       {!readOnly && (
         <form
           onSubmit={submit}
-          className="grid gap-3 rounded-2xl border border-border/70 bg-card p-4 sm:grid-cols-[1fr_auto_auto_auto] sm:items-end sm:p-5"
+          className="grid gap-3 rounded-2xl border border-border/70 bg-card p-4 sm:grid-cols-[minmax(0,1fr)_auto_auto_auto_auto] sm:items-end sm:p-5"
         >
           <div className="grid gap-1.5">
             <Label htmlFor="todo-title">名稱</Label>
@@ -63,7 +65,7 @@ export function TodosView({ color, onBack }: { color: string; onBack: () => void
               maxLength={100}
             />
           </div>
-          <div className="grid grid-cols-2 gap-3 sm:contents">
+          <div className="grid gap-3 sm:contents">
             <div className="grid gap-1.5">
               <Label htmlFor="todo-date">日期</Label>
               <Input
@@ -74,14 +76,25 @@ export function TodosView({ color, onBack }: { color: string; onBack: () => void
                 required
               />
             </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="todo-time">時間（選填）</Label>
-              <Input
-                id="todo-time"
-                type="time"
-                value={time}
-                onChange={(e) => setTime(e.target.value)}
-              />
+            <div className="grid grid-cols-2 gap-3 sm:contents">
+              <div className="grid min-w-0 gap-1.5">
+                <Label htmlFor="todo-time">開始（選填）</Label>
+                <Input
+                  id="todo-time"
+                  type="time"
+                  value={time}
+                  onChange={(e) => setTime(e.target.value)}
+                />
+              </div>
+              <div className="grid min-w-0 gap-1.5">
+                <Label htmlFor="todo-end">結束（選填）</Label>
+                <Input
+                  id="todo-end"
+                  type="time"
+                  value={end}
+                  onChange={(e) => setEnd(e.target.value)}
+                />
+              </div>
             </div>
           </div>
           <Button type="submit" disabled={!title.trim() || !date} className="gap-1.5">
@@ -177,7 +190,7 @@ function TodoRow({
         </div>
         <p className="mt-1 text-xs text-muted-foreground">
           {formatShortDate(todo.date)}
-          {todo.time ? ` ${todo.time}` : ""}
+          {formatTodoTime(todo) ? ` ${formatTodoTime(todo)}` : ""}
         </p>
       </div>
       {!readOnly && (

@@ -19,10 +19,22 @@ export type Todo = {
   id: string;
   title: string;
   date: string; // YYYY-MM-DD
-  time: string; // HH:mm or ""
+  /** Start HH:mm, or "". Kept as `time` so older saved todos still open. */
+  time: string;
+  /** End HH:mm, or omitted. Optional, like the start. */
+  end?: string;
   done: boolean;
   createdAt: string;
 };
+
+/** How a todo's optional range should read. Start-only stays a single time. */
+export function formatTodoTime(todo: Pick<Todo, "time" | "end">) {
+  const start = todo.time || "";
+  const end = todo.end || "";
+  if (start && end) return `${start}–${end}`;
+  if (end) return `–${end}`;
+  return start;
+}
 
 export type ScheduleItem = {
   id: string;

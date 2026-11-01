@@ -39,6 +39,12 @@ export type PlannerInput = {
 };
 
 const round15 = (m: number) => Math.max(15, Math.ceil(m / 15) * 15);
+
+function todoMinutes(todo: { time: string; end?: string }) {
+  if (!todo.time || !todo.end) return TODO_MINUTES;
+  const span = toMinutes(todo.end) - toMinutes(todo.time);
+  return span > 0 ? span : TODO_MINUTES;
+}
 const hhmm = (min: number) =>
   `${String(Math.floor(min / 60) % 24).padStart(2, "0")}:${String(min % 60).padStart(2, "0")}`;
 
@@ -218,7 +224,14 @@ export function generatePlan(input: PlannerInput): DayPlan {
   for (const t of life.todos) {
     if (t.done) continue;
     if (t.date === date || (isToday && t.date < date)) {
-      add("todo", t.id, t.title, t.date < date ? `待辦・原本 ${formatShortDate(t.date)}` : "待辦", TODO_MINUTES, t.time);
+      add(
+        "todo",
+        t.id,
+        t.title,
+        t.date < date ? `待辦・原本 ${formatShortDate(t.date)}` : "待辦",
+        todoMinutes(t),
+        t.time,
+      );
     }
   }
   // Workout

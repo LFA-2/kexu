@@ -11,7 +11,7 @@ import { PenaltyView } from "@/components/games/penalty-view";
 import { MeetingsView } from "@/components/meetings-view";
 import { MonthCalendar } from "@/components/month-calendar";
 import { formatShortDate, toDateKey } from "@/lib/dates";
-import { METRICS, sortSchedule } from "@/lib/life";
+import { formatTodoTime, METRICS, sortSchedule } from "@/lib/life";
 import { usePeopleData, type PersonData } from "@/store/people-data";
 import { ChevronRight, Gamepad2, NotebookPen } from "lucide-react";
 
@@ -345,7 +345,7 @@ function Agenda({
           id: t.id,
           person,
           date: t.date,
-          time: t.time,
+          time: formatTodoTime(t),
           title: t.title,
           kind: "待辦",
           detail: "",

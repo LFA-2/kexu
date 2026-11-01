@@ -41,7 +41,7 @@ export function LifeView({ color }: { color: string }) {
   const today = toDateKey(new Date());
   const openTodos = todos
     .filter((t) => !t.done)
-    .sort((a, b) => a.date.localeCompare(b.date) || (a.time || "99").localeCompare(b.time || "99"));
+    .sort((a, b) => a.date.localeCompare(b.date) || (a.time || a.end || "99").localeCompare(b.time || b.end || "99"));
   const next = openTodos.find((t) => t.date >= today);
   const upcomingDates = available.filter((d) => d >= today);
   const todayPlans = schedule?.[today]?.length ?? 0;

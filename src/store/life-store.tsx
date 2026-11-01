@@ -22,7 +22,7 @@ type LifeStore = LifeState & {
   loaded: boolean;
   syncStatus: SyncStatus;
   setMetric: (date: string, key: MetricKey, value: number | null) => void;
-  addTodo: (input: Pick<Todo, "title" | "date" | "time">) => void;
+  addTodo: (input: Pick<Todo, "title" | "date" | "time" | "end">) => void;
   toggleTodo: (id: string) => void;
   removeTodo: (id: string) => void;
   setNote: (date: string, text: string) => void;
@@ -81,10 +81,12 @@ export function LifeProvider({
   );
 
   const addTodo = useCallback(
-    (input: Pick<Todo, "title" | "date" | "time">) => {
+    (input: Pick<Todo, "title" | "date" | "time" | "end">) => {
       const todo: Todo = {
         ...input,
         title: input.title.trim(),
+        time: input.time,
+        end: input.end || undefined,
         id: uid("todo"),
         done: false,
         createdAt: new Date().toISOString(),
