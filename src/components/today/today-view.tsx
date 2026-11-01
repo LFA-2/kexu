@@ -790,7 +790,12 @@ function AddDialog({
   const [title, setTitle] = useState("");
   const [start, setStart] = useState("");
   const [minutes, setMinutes] = useState<number | null>(30);
-  const work = openWork(date, school).filter((w) => !inPlan.has(w.refId));
+  const all = openWork(date, school);
+  const openRefs = new Set(all.map((w) => w.refId));
+  // Study units go in order: only offer the next one of each course.
+  const work = all.filter(
+    (w) => !inPlan.has(w.refId) && (!w.prev || !openRefs.has(w.prev) || inPlan.has(w.prev)),
+  );
   const [pick, setPick] = useState<string | null>(null);
   const picked = work.find((w) => w.refId === pick);
 
@@ -799,7 +804,7 @@ function AddDialog({
       <DialogContent className="flex max-h-[90dvh] flex-col sm:max-w-md">
         <DialogHeader>
           <DialogTitle>新增到這天</DialogTitle>
-          <DialogDescription>從學校的作業／讀書進度挑，或自己加一項。</DialogDescription>
+          <DialogDescription>從學校的作業／讀書進度挑（讀書依章節順序，只列下一個），或自己加一項。</DialogDescription>
         </DialogHeader>
         <div className="flex rounded-lg border border-border/80 p-0.5">
           {(["school", "custom"] as const).map((t) => (

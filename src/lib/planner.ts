@@ -93,6 +93,10 @@ type Work = {
   /** days available including today; Infinity when no deadline */
   workdays: number;
   order: number;
+  /** Study units are read in order: the unit that must be finished before this one. */
+  prev?: string;
+  /** Course id shared by a chain of study units. */
+  chain?: string;
 };
 
 /** Everything school-related that still needs work, most urgent first. */
@@ -119,9 +123,21 @@ export function openWork(date: string, school: SchoolState): Work[] {
       order: courseOrder.get(h.courseId) ?? 99,
     });
   }
-  for (const u of school.progress) {
-    if (u.completed) continue;
+  // Study units of a course are read one after another, so a unit must be done by the
+  // earliest deadline of any unit after it.
+  const units = school.progress
+    .filter((u) => !u.completed)
+    .sort((a, b) => a.courseId.localeCompare(b.courseId) || a.order - b.order);
+  const effective = new Map<string, string | undefined>();
+  for (let i = units.length - 1; i >= 0; i--) {
+    const u = units[i];
+    const own = unitDeadline(u, school.exams);
+    const next = units[i + 1]?.courseId === u.courseId ? effective.get(units[i + 1].id) : undefined;
+    effective.set(u.id, own && next ? (own < next ? own : next) : (own ?? next));
+  }
+  for (const [i, u] of units.entries()) {
     const deadline = unitDeadline(u, school.exams);
+    const due = effective.get(u.id);
     const exam = u.dueDate
       ? undefined
       : school.exams
@@ -139,9 +155,11 @@ export function openWork(date: string, school: SchoolState): Work[] {
       estimate: est,
       progress,
       remaining: est * (1 - progress / 100),
-      deadline,
-      workdays: days(deadline),
+      deadline: due,
+      workdays: days(due),
       order: (courseOrder.get(u.courseId) ?? 99) * 1000 + u.order,
+      chain: u.courseId,
+      prev: units[i - 1]?.courseId === u.courseId ? units[i - 1].id : undefined,
     });
   }
   return out.sort(
@@ -236,24 +254,65 @@ export function generatePlan(input: PlannerInput): DayPlan {
   const fixedMinutes = [...fixed, ...kept].reduce((a, i) => a + i.minutes, 0);
   let budget = Math.max(0, Math.min(settings.studyBudget, free - fixedMinutes));
 
-  const work = openWork(date, school).filter((w) => !skip(w.kind, w.refId) && w.remaining > 0);
+  const open = openWork(date, school).filter((w) => w.remaining > 0);
+  const byRef = new Map(open.map((w) => [w.refId, w]));
+  const work = open.filter((w) => !skip(w.kind, w.refId));
   const alloc = new Map<string, number>();
+  // Units the user placed by hand count as planned for the chain.
+  for (const i of kept) {
+    if (i.kind === "unit" && i.refId) alloc.set(i.refId, (alloc.get(i.refId) ?? 0) + i.minutes);
+  }
+  const left = (w: Work) => w.remaining - (alloc.get(w.refId) ?? 0);
+  /** A study unit can start only once the one before it is fully planned (or done). */
+  const ready = (w: Work): boolean => {
+    const p = w.prev ? byRef.get(w.prev) : undefined;
+    return !p || left(p) <= 0.5;
+  };
   const give = (w: Work, m: number) => {
-    const prev = alloc.get(w.refId) ?? 0;
-    const add = Math.min(m, w.remaining - prev);
+    if (!ready(w)) return 0;
+    const add = Math.min(m, left(w));
     if (add <= 0) return 0;
-    alloc.set(w.refId, prev + add);
+    alloc.set(w.refId, (alloc.get(w.refId) ?? 0) + add);
     return add;
+  };
+  /** Give minutes to a unit chain front to back, starting at w. */
+  const giveChain = (w: Work, m: number) => {
+    let total = 0;
+    for (const u of work) {
+      if (u.chain !== w.chain || u.kind !== "unit" || u.order < w.order) continue;
+      if (m - total <= 0) break;
+      const got = give(u, m - total);
+      total += got;
+      if (left(u) > 0.5) break;
+    }
+    return total;
   };
 
   // 1. Due today/tomorrow or overdue: finish them, even past the budget.
   for (const w of work) {
-    if (w.workdays === 1) budget -= give(w, w.remaining);
+    if (w.workdays === 1) budget -= give(w, left(w));
   }
   // 2. Spread the rest evenly over the days left.
+  const paced = new Set<string>();
   for (const w of work) {
     if (budget <= 0) break;
     if (w.workdays === 1 || !Number.isFinite(w.workdays)) continue;
+    if (w.kind === "unit") {
+      // One pace for the whole chain: enough that every later deadline is still met.
+      if (!w.chain || paced.has(w.chain) || !ready(w)) continue;
+      paced.add(w.chain);
+      let cum = 0;
+      let pace = 0;
+      for (const u of work) {
+        if (u.chain !== w.chain || u.kind !== "unit" || u.order < w.order) continue;
+        cum += left(u);
+        if (Number.isFinite(u.workdays)) pace = Math.max(pace, cum / u.workdays);
+      }
+      const share = Math.max(Math.min(left(w), MIN_CHUNK), round15(pace));
+      const m = Math.min(share, budget);
+      if (m >= 15 || m >= left(w)) budget -= giveChain(w, m);
+      continue;
+    }
     const share = Math.max(Math.min(w.remaining, MIN_CHUNK), round15(w.remaining / w.workdays));
     const m = Math.min(share, budget);
     if (m >= 15 || m >= w.remaining) budget -= give(w, m);
@@ -262,16 +321,19 @@ export function generatePlan(input: PlannerInput): DayPlan {
   for (const w of work) {
     if (budget < 15) break;
     if (!Number.isFinite(w.workdays)) continue;
-    budget -= give(w, Math.min(budget, round15(w.remaining - (alloc.get(w.refId) ?? 0))));
+    if (left(w) <= 0.5) continue;
+    budget -= give(w, Math.min(budget, round15(left(w))));
   }
   // 4. Still spare: up to two units without any deadline.
   let extra = 0;
   for (const w of work) {
     if (budget < 15 || extra >= 2) break;
-    if (Number.isFinite(w.workdays)) continue;
-    const m = Math.min(budget, round15(w.remaining));
-    budget -= give(w, m);
-    extra++;
+    if (Number.isFinite(w.workdays) || !ready(w) || left(w) <= 0.5) continue;
+    const m = Math.min(budget, round15(left(w)));
+    const got = give(w, m);
+    budget -= got;
+    // Finishing a unit lets the next one in its chain follow on the same day.
+    if (!w.chain || left(w) > 0.5) extra++;
   }
 
   const schoolItems = work.flatMap((w) => {
