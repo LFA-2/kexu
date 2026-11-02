@@ -7,7 +7,8 @@ import { describeError } from "@/lib/supabase";
 import { useAuth } from "@/store/auth-store";
 import { useLinks, type LinkedPerson } from "@/store/links-store";
 import { ThemePicker } from "@/components/theme-picker";
-import { ArrowLeft, Copy, LogOut } from "lucide-react";
+import { hardReload } from "@/lib/hard-reload";
+import { ArrowLeft, Copy, LogOut, RefreshCw } from "lucide-react";
 
 const REQUEST_ERRORS = {
   not_found: "找不到這個連結碼。",
@@ -177,6 +178,13 @@ export function AccountView({ onBack }: { onBack: () => void }) {
           />
         </Section>
       )}
+
+      <Section title="強制更新" hint="畫面還是舊的時候用。會清掉這台裝置的離線快取再重新載入，資料都在雲端，不會不見。">
+        <Button variant="outline" size="sm" className="gap-1.5" onClick={hardReload}>
+          <RefreshCw className="size-3.5" />
+          清除快取並重新載入
+        </Button>
+      </Section>
 
       <Button variant="outline" className="w-full gap-1.5" onClick={() => signOut()}>
         <LogOut className="size-4" />

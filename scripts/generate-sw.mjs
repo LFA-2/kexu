@@ -1,6 +1,7 @@
 // Writes out/sw.js with a precache list of every exported file.
 // The cache name is a hash of the file contents, so each deploy yields a new
-// service worker, which the page surfaces as "有新版本".
+// service worker. It activates as soon as it has cached everything; the page reloads
+// or shows "有新版本" only if it is still running an older build.
 import { createHash } from "node:crypto";
 import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -33,6 +34,7 @@ const urls = files.map((rel) => {
 const sw = `const CACHE = "kexu-${version}";
 const BASE = ${JSON.stringify(BASE)};
 const ASSETS = ${JSON.stringify(urls)};
+const NAV_TIMEOUT_MS = 3000;
 
 self.addEventListener("install", (event) => {
   // GitHub Pages sends max-age=600; bypass the HTTP cache so a fresh deploy
@@ -50,6 +52,8 @@ self.addEventListener("install", (event) => {
           throw new Error("stale page in precache: " + chunk);
         }
       }
+      // Pages always load fresh HTML when online, so the new cache can take over right away.
+      await self.skipWaiting();
     }),
   );
 });
@@ -77,10 +81,19 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(request.url);
   if (url.origin !== self.location.origin || !url.pathname.startsWith(BASE + "/")) return;
 
+  // Pages: network first so a deploy shows up on the next launch; the cached copy is the
+  // offline fallback, also used when the network is too slow to answer.
   if (request.mode === "navigate") {
+    const cached = () => caches.open(CACHE).then((cache) => cache.match(BASE + "/"));
+    const network = fetch(request.url, { cache: "no-cache", credentials: "same-origin" }).then((res) => {
+      if (!res.ok) throw new Error("navigation " + res.status);
+      return res;
+    });
+    network.catch(() => {});
+    const slow = new Promise((resolve) => setTimeout(resolve, NAV_TIMEOUT_MS)).then(cached);
     event.respondWith(
-      caches.open(CACHE).then((cache) =>
-        cache.match(BASE + "/").then((cached) => cached || fetch(request)),
+      Promise.race([network, slow.then((res) => res || network)]).catch(() =>
+        cached().then((res) => res || network),
       ),
     );
     return;

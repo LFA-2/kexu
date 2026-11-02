@@ -7,8 +7,18 @@ import { Share, X } from "lucide-react";
 const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 const INSTALL_HINT_KEY = "kexu-install-hint-dismissed";
 
+/** Right after launch a reload is barely noticeable; later it could interrupt typing. */
+const SILENT_RELOAD_MS = 10000;
+
+/** Whether this page's own scripts are in the offline cache, i.e. it runs the cached build. */
+async function runningCachedBuild() {
+  const script = [...document.scripts].find((s) => s.src.includes("/_next/static/"));
+  if (!script) return true;
+  return !!(await caches.match(script.src, { ignoreSearch: true }));
+}
+
 export function UpdateBanner() {
-  const [waiting, setWaiting] = useState<ServiceWorker | null>(null);
+  const [outdated, setOutdated] = useState(false);
 
   useEffect(() => {
     if (process.env.NODE_ENV !== "production" || !("serviceWorker" in navigator)) return;
@@ -16,31 +26,21 @@ export function UpdateBanner() {
     let registration: ServiceWorkerRegistration | undefined;
     let reloading = false;
 
-    const track = (worker: ServiceWorker | null) => {
-      if (!worker) return;
-      const check = () => {
-        // Only an update if a previous version already controls the page.
-        if (worker.state === "installed" && navigator.serviceWorker.controller) {
-          setWaiting(worker);
-        }
-      };
-      check();
-      worker.addEventListener("statechange", check);
-    };
-
     navigator.serviceWorker
       .register(`${BASE_PATH}/sw.js`, { scope: `${BASE_PATH}/` })
       .then((reg) => {
         registration = reg;
-        track(reg.waiting);
-        reg.addEventListener("updatefound", () => track(reg.installing));
+        // A worker from an older release may still be waiting for the old "update" button.
+        reg.waiting?.postMessage("SKIP_WAITING");
       })
       .catch(() => {});
 
-    const onControllerChange = () => {
-      if (reloading) return;
-      reloading = true;
-      window.location.reload();
+    const onControllerChange = async () => {
+      if (reloading || (await runningCachedBuild())) return;
+      if (performance.now() < SILENT_RELOAD_MS) {
+        reloading = true;
+        window.location.reload();
+      } else setOutdated(true);
     };
     navigator.serviceWorker.addEventListener("controllerchange", onControllerChange);
 
@@ -56,12 +56,12 @@ export function UpdateBanner() {
     };
   }, []);
 
-  if (!waiting) return null;
+  if (!outdated) return null;
 
   return (
     <div className="fixed inset-x-3 top-3 z-50 mx-auto flex max-w-md items-center gap-3 rounded-2xl border border-teal-700/30 bg-card px-4 py-3 shadow-lg">
       <p className="flex-1 text-sm text-ink">有新版本可以更新</p>
-      <Button size="sm" onClick={() => waiting.postMessage("SKIP_WAITING")}>
+      <Button size="sm" onClick={() => window.location.reload()}>
         立即更新
       </Button>
     </div>
