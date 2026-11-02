@@ -312,6 +312,118 @@ export function LineChart({
   );
 }
 
+export type LineSeries = { key: string; label: string; color: string; values: (number | undefined)[] };
+
+/** Several whole-number series over shared x labels, with a legend and a crosshair tooltip. */
+export function MultiLineChart({
+  labels,
+  series,
+  height = 200,
+  unit = "",
+}: {
+  labels: string[];
+  series: LineSeries[];
+  height?: number;
+  unit?: string;
+}) {
+  const [hover, setHover] = useState<number | null>(null);
+  const W = 640;
+  const H = height;
+  const PAD = { left: 32, right: 12, top: 14, bottom: 26 };
+  const innerW = W - PAD.left - PAD.right;
+  const innerH = H - PAD.top - PAD.bottom;
+  const n = labels.length;
+  const vals = series.flatMap((s) => s.values.filter((v): v is number => v !== undefined));
+  if (vals.length === 0) {
+    return <p className="py-10 text-center text-sm text-muted-foreground">還沒有資料</p>;
+  }
+  const tickStep = Math.max(1, Math.ceil(Math.max(...vals) / 4));
+  const hi = tickStep * Math.max(1, Math.ceil((Math.max(...vals) + 0.5) / tickStep));
+  const yTicks = Array.from({ length: hi / tickStep + 1 }, (_, k) => k * tickStep);
+  const x = (i: number) => PAD.left + (n === 1 ? innerW / 2 : (i / (n - 1)) * innerW);
+  const y = (v: number) => PAD.top + ((hi - v) / hi) * innerH;
+  const step = Math.max(1, Math.ceil(n / 6));
+
+  function onMove(e: React.PointerEvent<SVGSVGElement>) {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const px = ((e.clientX - rect.left) / rect.width) * W;
+    const i = n === 1 ? 0 : Math.round(((px - PAD.left) / innerW) * (n - 1));
+    setHover(Math.max(0, Math.min(n - 1, i)));
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+        {series.map((s) => (
+          <span key={s.key} className="flex items-center gap-1.5">
+            <span className="h-0.5 w-4 rounded-full" style={{ backgroundColor: s.color }} />
+            {s.label}
+          </span>
+        ))}
+      </div>
+      <div className="relative">
+        <svg
+          viewBox={`0 0 ${W} ${H}`}
+          className="h-auto w-full touch-pan-y"
+          onPointerMove={onMove}
+          onPointerLeave={() => setHover(null)}
+          role="img"
+        >
+          {yTicks.map((t) => (
+            <g key={t}>
+              <line x1={PAD.left} x2={W - PAD.right} y1={y(t)} y2={y(t)} stroke={GRID} strokeDasharray="4 4" />
+              <text x={PAD.left - 6} y={y(t) + 4} textAnchor="end" fontSize={11} fill={AXIS_TEXT}>
+                {t}
+              </text>
+            </g>
+          ))}
+          {labels.map((label, i) =>
+            i % step === 0 || i === n - 1 ? (
+              <text key={i} x={x(i)} y={H - 6} textAnchor="middle" fontSize={11} fill={AXIS_TEXT}>
+                {label}
+              </text>
+            ) : null,
+          )}
+          {hover !== null && (
+            <line x1={x(hover)} x2={x(hover)} y1={PAD.top} y2={PAD.top + innerH} stroke="var(--muted-foreground)" />
+          )}
+          {series.map((s) => {
+            const pts = s.values.flatMap((v, i) => (v === undefined ? [] : [{ i, v }]));
+            const path = pts.map((p, k) => `${k === 0 ? "M" : "L"}${x(p.i)},${y(p.v)}`).join(" ");
+            return (
+              <g key={s.key}>
+                <path d={path} fill="none" stroke={s.color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+                {pts.map((p) => (
+                  <circle
+                    key={p.i}
+                    cx={x(p.i)}
+                    cy={y(p.v)}
+                    r={p.i === hover ? 5 : n > 40 ? 2.5 : 4}
+                    fill={s.color}
+                    stroke="var(--card)"
+                    strokeWidth={2}
+                  />
+                ))}
+              </g>
+            );
+          })}
+        </svg>
+        {hover !== null && (
+          <Tooltip leftPct={(x(hover) / W) * 100}>
+            <span className="block text-muted-foreground">{labels[hover]}</span>
+            {series.map((s) => (
+              <span key={s.key} className="block tabular-nums text-ink">
+                <span style={{ color: s.color }}>●</span> {s.label}{" "}
+                {s.values[hover] === undefined ? "—" : `${s.values[hover]}${unit}`}
+              </span>
+            ))}
+          </Tooltip>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export type Segment = { key: string; label: string; value: number; color: string };
 
 /** One horizontal 100% bar with a labelled legend (labels carry identity, not color alone). */

@@ -1,12 +1,14 @@
 "use client";
 
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { format, parseISO } from "date-fns";
+import { MultiLineChart, SERIES } from "@/components/charts";
 import type { Person } from "@/components/shared-view";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatShortDate } from "@/lib/dates";
 import { describeError } from "@/lib/supabase";
-import { useAbGame, type Guess } from "@/store/ab-game";
+import { useAbGame, type Guess, type PastGuess } from "@/store/ab-game";
 import { ArrowLeft } from "lucide-react";
 
 const GUESS_ERRORS = {
@@ -110,6 +112,11 @@ export function AbGameView({
                 iHaveSecret={!!game.mySecret}
                 mine={progressOf(game.guesses, me.userId, opponent.userId)}
                 theirs={progressOf(game.guesses, opponent.userId, me.userId)}
+              />
+              <HistoryCard
+                me={me}
+                opponent={opponent}
+                guesses={[...game.history, ...game.guesses.map((g) => ({ ...g, day: game.day }))]}
               />
             </>
           )}
@@ -328,6 +335,58 @@ function GuessCard({
               {error && <p className="text-sm text-destructive">{error}</p>}
             </form>
           )}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+const HISTORY_SHOWN = 30;
+
+/** Tries it took to solve, per day, for one guesser → owner pair. Unsolved days are left out. */
+function solvedTries(guesses: PastGuess[], guesser: string, owner: string) {
+  const tries = new Map<string, number>();
+  const solved = new Set<string>();
+  for (const g of guesses) {
+    if (g.guesser !== guesser || g.owner !== owner) continue;
+    tries.set(g.day, (tries.get(g.day) ?? 0) + 1);
+    if (g.a === 4) solved.add(g.day);
+  }
+  return new Map([...solved].map((d) => [d, tries.get(d) ?? 0]));
+}
+
+function HistoryCard({ me, opponent, guesses }: { me: Person; opponent: Person; guesses: PastGuess[] }) {
+  const { days, mine, theirs } = useMemo(() => {
+    const mine = solvedTries(guesses, me.userId, opponent.userId);
+    const theirs = solvedTries(guesses, opponent.userId, me.userId);
+    const days = [...new Set([...mine.keys(), ...theirs.keys()])].sort().slice(-HISTORY_SHOWN);
+    return { days, mine, theirs };
+  }, [guesses, me.userId, opponent.userId]);
+  const average = (m: Map<string, number>) => {
+    const v = days.flatMap((d) => (m.has(d) ? [m.get(d)!] : []));
+    return v.length ? (v.reduce((a, b) => a + b, 0) / v.length).toFixed(1) : null;
+  };
+  const myAvg = average(mine);
+  const theirAvg = average(theirs);
+  const theirColor = opponent.color === me.color ? SERIES[1] : opponent.color;
+
+  return (
+    <Card title="每天猜中用了幾次">
+      {days.length === 0 ? (
+        <p className="text-sm text-muted-foreground">猜中之後，這裡會記錄你們每天用了幾次。</p>
+      ) : (
+        <div className="space-y-2">
+          <MultiLineChart
+            labels={days.map((d) => format(parseISO(d), "M/d"))}
+            unit=" 次"
+            series={[
+              { key: "me", label: "你", color: me.color, values: days.map((d) => mine.get(d)) },
+              { key: "them", label: opponent.name, color: theirColor, values: days.map((d) => theirs.get(d)) },
+            ]}
+          />
+          <p className="text-xs text-muted-foreground">
+            次數越少越厲害・平均 你 {myAvg ?? "—"} 次・{opponent.name} {theirAvg ?? "—"} 次
+          </p>
         </div>
       )}
     </Card>

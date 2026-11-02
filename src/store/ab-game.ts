@@ -14,6 +14,11 @@ export type Guess = {
   b: number;
 };
 
+/** A guess from an earlier day, enough to count tries per day. */
+export type PastGuess = Pick<Guess, "guesser" | "owner" | "a"> & { day: string };
+
+const HISTORY_DAYS = 90;
+
 export type GuessResult =
   | { ok: true; a: number; b: number; attempts: number; solved: boolean }
   | { ok: false; error: "invalid" | "not_linked" | "no_secret" | "already_solved" };
@@ -31,6 +36,26 @@ export function useAbGame() {
   const [readyIds, setReadyIds] = useState<Set<string>>(new Set());
   const [guesses, setGuesses] = useState<Guess[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [history, setHistory] = useState<PastGuess[]>([]);
+
+  // Earlier days don't change, so they're fetched once per game day.
+  useEffect(() => {
+    let cancelled = false;
+    const from = new Date(`${day}T00:00:00Z`);
+    from.setUTCDate(from.getUTCDate() - HISTORY_DAYS);
+    supabase
+      .from("ab_guesses")
+      .select("day, guesser, owner, a")
+      .lt("day", day)
+      .gte("day", from.toISOString().slice(0, 10))
+      .order("id")
+      .then(({ data, error }) => {
+        if (!cancelled && !error) setHistory(data as PastGuess[]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [day]);
 
   const refresh = useCallback(async () => {
     const today = taipeiToday();
@@ -87,5 +112,5 @@ export function useAbGame() {
     [refresh],
   );
 
-  return { day, mySecret, readyIds, guesses, loaded, setSecret, guess, refresh };
+  return { day, mySecret, readyIds, guesses, history, loaded, setSecret, guess, refresh };
 }
