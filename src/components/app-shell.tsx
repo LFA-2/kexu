@@ -254,30 +254,30 @@ function MainApp({ me }: { me: string }) {
               </div>
             )}
 
-            {activeCategory === "today" ? (
-              <SchoolProvider key={`s-${ownerId}`} ownerId={ownerId} editable={isMine}>
-                <LifeProvider key={`l-${ownerId}`} ownerId={ownerId} editable={isMine}>
-                  <FitnessProvider key={`f-${ownerId}`} ownerId={ownerId} editable={isMine}>
-                    <TodayMain me={me} isMine={isMine} color={ownerColor} />
-                  </FitnessProvider>
-                </LifeProvider>
-              </SchoolProvider>
-            ) : activeCategory === "school" ? (
-              <SchoolProvider key={ownerId} ownerId={ownerId} editable={isMine}>
-                <SchoolMain
-                  view={view}
-                  selectedCourseId={selectedCourseId}
-                  onSelectCourse={setSelectedCourseId}
-                />
-              </SchoolProvider>
-            ) : activeCategory === "fitness" ? (
-              <FitnessProvider key={ownerId} ownerId={ownerId} editable={isMine}>
+            {activeCategory === "fitness" ? (
+              <FitnessProvider key={`f-${ownerId}`} ownerId={ownerId} editable={isMine}>
                 <FitnessMain owner={ownerId} />
               </FitnessProvider>
             ) : (
-              <LifeProvider key={ownerId} ownerId={ownerId} editable={isMine}>
-                <LifeMain color={ownerColor} />
-              </LifeProvider>
+              // Keep one School+Life tree across 今日／學校／生活 so timetable edits
+              // stay in memory when switching tabs (needed for 今明行程 sync).
+              <SchoolProvider key={`s-${ownerId}`} ownerId={ownerId} editable={isMine}>
+                <LifeProvider key={`l-${ownerId}`} ownerId={ownerId} editable={isMine}>
+                  {activeCategory === "today" ? (
+                    <FitnessProvider key={`f-${ownerId}`} ownerId={ownerId} editable={isMine}>
+                      <TodayMain me={me} isMine={isMine} color={ownerColor} />
+                    </FitnessProvider>
+                  ) : activeCategory === "school" ? (
+                    <SchoolMain
+                      view={view}
+                      selectedCourseId={selectedCourseId}
+                      onSelectCourse={setSelectedCourseId}
+                    />
+                  ) : (
+                    <LifeMain color={ownerColor} />
+                  )}
+                </LifeProvider>
+              </SchoolProvider>
             )}
           </>
         )}

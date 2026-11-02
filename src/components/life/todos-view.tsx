@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { TimeField, parseTime } from "@/components/time-field";
 import { formatShortDate, relativeStatus, toDateKey } from "@/lib/dates";
 import { formatTodoTime, type Todo } from "@/lib/life";
 import { useLife } from "@/store/life-store";
@@ -30,7 +31,7 @@ export function TodosView({ color, onBack }: { color: string; onBack: () => void
   function submit(event: FormEvent) {
     event.preventDefault();
     if (!title.trim() || !date) return;
-    addTodo({ title, date, time, end });
+    addTodo({ title, date, time: parseTime(time) ?? "", end: parseTime(end) ?? "" });
     setTitle("");
     setTime("");
     setEnd("");
@@ -79,21 +80,11 @@ export function TodosView({ color, onBack }: { color: string; onBack: () => void
             <div className="grid grid-cols-2 gap-3 sm:contents">
               <div className="grid min-w-0 gap-1.5">
                 <Label htmlFor="todo-time">開始（選填）</Label>
-                <Input
-                  id="todo-time"
-                  type="time"
-                  value={time}
-                  onChange={(e) => setTime(e.target.value)}
-                />
+                <TimeField id="todo-time" value={time} onChange={setTime} />
               </div>
               <div className="grid min-w-0 gap-1.5">
                 <Label htmlFor="todo-end">結束（選填）</Label>
-                <Input
-                  id="todo-end"
-                  type="time"
-                  value={end}
-                  onChange={(e) => setEnd(e.target.value)}
-                />
+                <TimeField id="todo-end" value={end} onChange={setEnd} />
               </div>
             </div>
           </div>

@@ -12,7 +12,8 @@ import { MeetingsView } from "@/components/meetings-view";
 import { MonthCalendar } from "@/components/month-calendar";
 import { TasksView } from "@/components/tasks-view";
 import { formatShortDate, toDateKey } from "@/lib/dates";
-import { formatTodoTime, METRICS, sortSchedule } from "@/lib/life";
+import { formatTodoTime, METRICS } from "@/lib/life";
+import { withTimetableClasses } from "@/lib/schedule-sync";
 import { usePeopleData, type PersonData } from "@/store/people-data";
 import { ChevronRight, Gamepad2, NotebookPen, Target } from "lucide-react";
 
@@ -220,7 +221,9 @@ function DayPlans({
   people: Person[];
   data: Record<string, PersonData>;
 }) {
-  const plans = people.map((p) => sortSchedule(data[p.userId]?.life?.schedule?.[date] ?? []));
+  const plans = people.map((p) =>
+    withTimetableClasses(date, data[p.userId]?.life?.schedule?.[date], data[p.userId]?.school),
+  );
   const range = timelineRange(plans);
 
   return (

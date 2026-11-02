@@ -11,6 +11,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { TimeField, parseTime } from "@/components/time-field";
 import { Label } from "@/components/ui/label";
 import { isoWeekday, WEEKDAYS } from "@/lib/dates";
 import { toMinutes } from "@/lib/life";
@@ -237,12 +238,14 @@ function SlotDialog({
   const [title, setTitle] = useState(slot?.title ?? "");
   const [location, setLocation] = useState(slot?.location ?? "");
 
-  const timeOk = start && end && toMinutes(end) > toMinutes(start);
+  const startOk = parseTime(start);
+  const endOk = parseTime(end);
+  const timeOk = !!startOk && !!endOk && toMinutes(endOk) > toMinutes(startOk);
   const nameOk = courseId === "new" ? newName.trim() : courseId ? true : title.trim();
   const valid = days.length > 0 && timeOk && nameOk;
 
   function submit() {
-    if (!valid) return;
+    if (!valid || !startOk || !endOk) return;
     let cid: string | null = courseId || null;
     if (courseId === "new") {
       const used = new Set(courses.map((c) => c.color));
@@ -250,8 +253,8 @@ function SlotDialog({
       cid = addCourse(newName.trim(), color);
     }
     const fields = {
-      start,
-      end,
+      start: startOk,
+      end: endOk,
       courseId: cid,
       title: cid ? "" : title.trim(),
       location: location.trim().slice(0, 40),
@@ -299,11 +302,11 @@ function SlotDialog({
           <div className="grid grid-cols-2 gap-3">
             <div className="grid gap-2">
               <Label htmlFor="tt-start">開始</Label>
-              <Input id="tt-start" type="time" value={start} onChange={(e) => setStart(e.target.value)} />
+              <TimeField id="tt-start" value={start} onChange={setStart} />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="tt-end">結束</Label>
-              <Input id="tt-end" type="time" value={end} onChange={(e) => setEnd(e.target.value)} />
+              <TimeField id="tt-end" value={end} onChange={setEnd} />
             </div>
           </div>
           {!timeOk && start && end && (

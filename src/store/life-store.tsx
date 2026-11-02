@@ -14,6 +14,8 @@ import {
   type ScheduleItem,
   type Todo,
 } from "@/lib/life";
+import { scheduleNeedsSync, withTimetableClasses } from "@/lib/schedule-sync";
+import type { SchoolState } from "@/lib/types";
 import { uid } from "@/lib/utils";
 import { useCloudDoc, type SyncStatus } from "@/store/cloud-doc";
 
@@ -29,6 +31,8 @@ type LifeStore = LifeState & {
   toggleAvailable: (date: string) => void;
   addScheduleItem: (date: string, item: Omit<ScheduleItem, "id">) => void;
   removeScheduleItem: (date: string, id: string) => void;
+  /** Write this week's classes into the given days' 今明行程. */
+  syncTimetableDays: (dates: string[], school: SchoolState) => void;
   addHabit: (input: Omit<Habit, "id" | "createdAt">) => void;
   updateHabit: (id: string, patch: Partial<Omit<Habit, "id" | "createdAt">>) => void;
   removeHabit: (id: string) => void;
@@ -161,6 +165,34 @@ export function LifeProvider({
     [mutate],
   );
 
+  const syncTimetableDays = useCallback(
+    (dates: string[], school: SchoolState) => {
+      let changed = false;
+      const cutoff = toDateKey(subDays(new Date(), SCHEDULE_KEEP_DAYS));
+      const schedule = Object.fromEntries(
+        Object.entries(state.schedule ?? {}).filter(([d]) => d >= cutoff),
+      );
+      for (const date of dates) {
+        const next = withTimetableClasses(date, schedule[date], school);
+        if (!scheduleNeedsSync(schedule[date], next)) continue;
+        changed = true;
+        if (next.length) schedule[date] = next;
+        else delete schedule[date];
+      }
+      if (!changed) return;
+      mutate((prev) => {
+        const merged = { ...(prev.schedule ?? {}) };
+        for (const date of dates) {
+          const next = withTimetableClasses(date, merged[date], school);
+          if (next.length) merged[date] = next;
+          else delete merged[date];
+        }
+        return { ...prev, schedule: merged };
+      });
+    },
+    [mutate, state.schedule],
+  );
+
   const addHabit = useCallback(
     (input: Omit<Habit, "id" | "createdAt">) =>
       mutate((prev) => ({
@@ -252,6 +284,7 @@ export function LifeProvider({
     toggleAvailable,
     addScheduleItem,
     removeScheduleItem,
+    syncTimetableDays,
     addHabit,
     updateHabit,
     removeHabit,

@@ -1,25 +1,35 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { addDays } from "date-fns";
 import { DayTimeline, timelineRange } from "@/components/day-timeline";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { TimeField, parseTime } from "@/components/time-field";
 import { formatShortDate, toDateKey } from "@/lib/dates";
 import { POINT_PRESETS, SPAN_PRESETS, sortSchedule, type ScheduleItem } from "@/lib/life";
 import { useLife } from "@/store/life-store";
+import { useSchool } from "@/store/school-store";
 import { ArrowLeft, Plus, Trash2 } from "lucide-react";
 
 type Kind = ScheduleItem["kind"];
 
 export function ScheduleView({ color, onBack }: { color: string; onBack: () => void }) {
-  const { schedule, readOnly, addScheduleItem, removeScheduleItem } = useLife();
+  const { schedule, readOnly, loaded, addScheduleItem, removeScheduleItem, syncTimetableDays } = useLife();
+  const school = useSchool();
   const today = toDateKey(new Date());
   const tomorrow = toDateKey(addDays(new Date(), 1));
   const [day, setDay] = useState<"today" | "tomorrow">("today");
   const date = day === "today" ? today : tomorrow;
   const items = sortSchedule(schedule?.[date] ?? []);
+
+  useEffect(() => {
+    if (readOnly || !loaded || !school.loaded) return;
+    syncTimetableDays([today, tomorrow], school);
+    // school itself is passed so class names/times stay current
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-sync when timetable or courses change
+  }, [readOnly, loaded, school.loaded, school.timetable, school.courses, today, tomorrow, syncTimetableDays]);
 
   return (
     <div className="space-y-6">
@@ -30,7 +40,9 @@ export function ScheduleView({ color, onBack }: { color: string; onBack: () => v
 
       <header>
         <p className="text-sm text-muted-foreground">
-          {readOnly ? "今天和明天的主要行程" : "記下起床、出門、回家這些時間點，以及上學、開會這類時段"}
+          {readOnly
+            ? "今天和明天的主要行程"
+            : "課表會自動匯入。也可以記起床、出門、開會這類時間"}
         </p>
         <h2 className="font-display mt-1 text-2xl tracking-tight text-ink sm:text-3xl">
           今明行程
@@ -82,8 +94,13 @@ export function ScheduleView({ color, onBack }: { color: string; onBack: () => v
               <span className="w-24 shrink-0 text-sm tabular-nums text-muted-foreground">
                 {item.kind === "span" ? `${item.start}–${item.end}` : item.start}
               </span>
-              <span className="min-w-0 flex-1 truncate text-sm text-ink">{item.label}</span>
-              {!readOnly && (
+              <span className="min-w-0 flex-1 truncate text-sm text-ink">
+                {item.label}
+                {item.fromTimetable && (
+                  <span className="ml-1.5 text-xs font-normal text-muted-foreground">課表</span>
+                )}
+              </span>
+              {!readOnly && !item.fromTimetable && (
                 <Button
                   variant="ghost"
                   size="icon-xs"
@@ -109,12 +126,18 @@ function AddForm({ onAdd }: { onAdd: (item: Omit<ScheduleItem, "id">) => void })
   const [end, setEnd] = useState("");
 
   const presets = kind === "point" ? POINT_PRESETS : SPAN_PRESETS;
-  const valid = label.trim() && start && (kind === "point" || (end && end !== start));
+  const startOk = parseTime(start);
+  const endOk = kind === "point" ? "" : parseTime(end);
+  const valid = !!label.trim() && !!startOk && (kind === "point" || (!!endOk && endOk !== startOk));
 
   function submit(event: FormEvent) {
     event.preventDefault();
-    if (!valid) return;
-    onAdd(kind === "point" ? { kind, label, start } : { kind, label, start, end });
+    if (!valid || !startOk) return;
+    onAdd(
+      kind === "point"
+        ? { kind, label, start: startOk }
+        : { kind, label, start: startOk, end: endOk! },
+    );
     setLabel("");
     setStart("");
     setEnd("");
@@ -173,17 +196,12 @@ function AddForm({ onAdd }: { onAdd: (item: Omit<ScheduleItem, "id">) => void })
       <div className="grid grid-cols-2 gap-3">
         <div className="grid min-w-0 gap-1.5">
           <Label htmlFor="plan-start">{kind === "point" ? "時間" : "開始"}</Label>
-          <Input
-            id="plan-start"
-            type="time"
-            value={start}
-            onChange={(e) => setStart(e.target.value)}
-          />
+          <TimeField id="plan-start" value={start} onChange={setStart} />
         </div>
         {kind === "span" && (
           <div className="grid min-w-0 gap-1.5">
             <Label htmlFor="plan-end">結束</Label>
-            <Input id="plan-end" type="time" value={end} onChange={(e) => setEnd(e.target.value)} />
+            <TimeField id="plan-end" value={end} onChange={setEnd} />
           </div>
         )}
       </div>

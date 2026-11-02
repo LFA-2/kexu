@@ -16,6 +16,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { TimeField, parseTime } from "@/components/time-field";
 import { createTask, deleteTask, formatSpan, listTasks, updateTask, type Task, type TaskFields } from "@/lib/tasks";
 import { ArrowLeft, Check, Gift, Pencil, Plus, Trash2, Undo2 } from "lucide-react";
 
@@ -361,7 +362,9 @@ function TaskDialog({
   const target = others.find((p) => p.userId === assignee);
 
   async function save() {
-    const due = new Date(`${date}T${time}`);
+    const hhmm = parseTime(time);
+    if (!hhmm) return setError("請填期限的日期和時間，例如 23:59。");
+    const due = new Date(`${date}T${hhmm}`);
     if (Number.isNaN(due.getTime())) return setError("請填期限的日期和時間。");
     if (!task && due.getTime() <= Date.now()) return setError("期限要在現在之後。");
     setBusy(true);
@@ -424,7 +427,7 @@ function TaskDialog({
             </div>
             <div className="grid gap-2">
               <Label htmlFor="task-time">時間</Label>
-              <Input id="task-time" type="time" value={time} onChange={(e) => setTime(e.target.value)} />
+              <TimeField id="task-time" value={time} onChange={setTime} />
             </div>
           </div>
           <div className="grid gap-2">

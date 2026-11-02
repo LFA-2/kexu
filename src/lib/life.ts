@@ -42,6 +42,8 @@ export type ScheduleItem = {
   label: string;
   start: string; // HH:mm
   end?: string; // HH:mm, spans only; earlier than start means past midnight
+  /** Timetable slot id — kept in sync with the weekly class schedule. */
+  fromTimetable?: string;
 };
 
 export const POINT_PRESETS = ["起床", "出門", "回家"];

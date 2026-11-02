@@ -69,7 +69,8 @@ export function busyIntervals(date: string, school: SchoolState, life: LifeState
     if (t.day === wd) out.push([toMinutes(t.start), toMinutes(t.end)]);
   }
   for (const s of life.schedule?.[date] ?? []) {
-    if (s.kind === "span") out.push(itemMinutes(s));
+    // Classes already come from the timetable; synced copies must not double-count.
+    if (s.kind === "span" && !s.fromTimetable) out.push(itemMinutes(s));
   }
   return merge(out);
 }

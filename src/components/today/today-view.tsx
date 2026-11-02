@@ -18,7 +18,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { isoWeekday, toDateKey } from "@/lib/dates";
+import { TimeField, parseTime } from "@/components/time-field";
+import { toDateKey } from "@/lib/dates";
 import {
   DEFAULT_PLAN_SETTINGS,
   sortSchedule,
@@ -59,6 +60,7 @@ import {
   ClipboardList,
   Dumbbell,
   GraduationCap,
+  GripVertical,
   ListTodo,
   NotebookPen,
   Pencil,
@@ -283,30 +285,31 @@ export function TodayView({ me, isMine, color }: { me: string; isMine: boolean; 
     }));
   })();
 
-  // Classes and 今明行程 entries on this day, shown in the timeline (not part of the %).
+  // Sync today's and tomorrow's classes into 今明行程 (once; skipped when already in sync).
+  useEffect(() => {
+    if (readOnly || !loaded || !school.loaded) return;
+    const tomorrow = toDateKey(addDays(parseISO(todayKey), 1));
+    life.syncTimetableDays([...new Set([todayKey, tomorrow, date])], school);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-sync when the timetable changes
+  }, [readOnly, loaded, school.loaded, school.timetable, school.courses, todayKey, date, life.syncTimetableDays]);
+
+  // 今明行程 (including classes synced from the timetable). Not counted in the %.
   const classes = useMemo((): ClassRow[] => {
-    const wd = isoWeekday(parseISO(date));
-    const name = new Map(school.courses.map((c) => [c.id, c]));
-    const lessons = (school.timetable ?? [])
-      .filter((t) => t.day === wd)
-      .map((t) => ({
-        prefix: "上課",
-        start: t.start,
-        end: t.end,
-        title: (t.courseId && name.get(t.courseId)?.name) || t.title || "上課",
-        location: t.location,
-        color: (t.courseId && name.get(t.courseId)?.color) || "#64748b",
-      }));
-    const plans = sortSchedule(life.schedule?.[date] ?? []).map((s) => ({
-      prefix: "行程",
-      start: s.start,
-      end: s.kind === "span" ? s.end : undefined,
-      title: s.label,
-      location: "",
-      color: "#475569",
-      point: s.kind === "point",
-    }));
-    return [...lessons, ...plans];
+    const slots = new Map((school.timetable ?? []).map((t) => [t.id, t]));
+    const courses = new Map(school.courses.map((c) => [c.id, c]));
+    return sortSchedule(life.schedule?.[date] ?? []).map((s) => {
+      const slot = s.fromTimetable ? slots.get(s.fromTimetable) : undefined;
+      const course = slot?.courseId ? courses.get(slot.courseId) : undefined;
+      return {
+        prefix: s.fromTimetable ? "上課" : "行程",
+        start: s.start,
+        end: s.kind === "span" ? s.end : undefined,
+        title: s.label,
+        location: "",
+        color: course?.color ?? "#475569",
+        point: s.kind === "point",
+      };
+    });
   }, [school.timetable, school.courses, life.schedule, date]);
 
   function setProgress(item: PlanItem, pct: number) {
@@ -375,6 +378,10 @@ export function TodayView({ me, isMine, color }: { me: string; isMine: boolean; 
         dismissed: (base.dismissed ?? []).filter((d) => d !== `${item.kind}:${item.refId}`),
       };
     });
+  }
+
+  function moveItem(item: PlanItem, start: string) {
+    saveItem({ ...item, start, manual: true });
   }
 
   if (!loaded) return <p className="py-16 text-center text-sm text-muted-foreground">載入中…</p>;
@@ -529,6 +536,9 @@ export function TodayView({ me, isMine, color }: { me: string; isMine: boolean; 
             </Button>
           )}
         </div>
+        {!readOnly && !isFuture && items.length > 0 && (
+          <p className="text-xs text-muted-foreground">按住左側⋮⋮上下拖，可以改時間和順序。</p>
+        )}
         {!readOnly && date === todayKey && shortfalls.length > 0 && (
           <div className="rounded-xl bg-amber-50 px-3 py-2.5 text-sm text-amber-900 ring-1 ring-amber-300/80">
             {shortfalls.slice(0, 2).map((s) => (
@@ -558,6 +568,7 @@ export function TodayView({ me, isMine, color }: { me: string; isMine: boolean; 
             blockers={isFuture ? undefined : blockers}
             onProgress={setProgress}
             onEdit={setEditing}
+            onMove={moveItem}
           />
         )}
       </section>
@@ -612,6 +623,20 @@ type ClassRow = {
   point?: boolean;
 };
 
+type TimelineRow =
+  | { type: "item"; id: string; start: string; item: PlanItem }
+  | { type: "class"; id: string; start: string; cls: ClassRow };
+
+const hhmmOf = (min: number) => {
+  const m = ((min % (24 * 60)) + 24 * 60) % (24 * 60);
+  return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+};
+const snap5 = (min: number) => Math.round(min / 5) * 5;
+const endsAt = (row: TimelineRow) =>
+  row.type === "class"
+    ? toMinutes(row.cls.end || row.cls.start)
+    : toMinutes(row.item.start || "08:00") + row.item.minutes;
+
 function Timeline({
   items,
   classes,
@@ -622,6 +647,7 @@ function Timeline({
   blockers,
   onProgress,
   onEdit,
+  onMove,
 }: {
   items: PlanItem[];
   classes: ClassRow[];
@@ -633,20 +659,118 @@ function Timeline({
   blockers?: Map<string, string>;
   onProgress: (i: PlanItem, pct: number) => void;
   onEdit: (i: PlanItem) => void;
+  onMove: (item: PlanItem, start: string) => void;
 }) {
-  const rows = [
-    ...items.map((i) => ({ type: "item" as const, start: i.start || "99:99", item: i })),
-    ...classes.map((c) => ({ type: "class" as const, start: c.start, cls: c })),
-  ].sort((a, b) => a.start.localeCompare(b.start) || (a.type === "class" ? -1 : 1));
+  const baseRows = useMemo<TimelineRow[]>(
+    () =>
+      [
+        ...items.map((i) => ({ type: "item" as const, id: i.id, start: i.start || "99:99", item: i })),
+        ...classes.map((c, k) => ({
+          type: "class" as const,
+          id: `c:${c.prefix}:${c.start}:${c.title}:${k}`,
+          start: c.start,
+          cls: c,
+        })),
+      ].sort((a, b) => a.start.localeCompare(b.start) || (a.type === "class" ? -1 : 1)),
+    [items, classes],
+  );
+  const canDrag = !readOnly && !future;
+  const listRef = useRef<HTMLUListElement>(null);
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [order, setOrder] = useState<string[] | null>(null);
+  const rows = order
+    ? order.flatMap((id) => {
+        const row = baseRows.find((r) => r.id === id);
+        return row ? [row] : [];
+      })
+    : baseRows;
+
+  const dragRef = useRef({
+    id: null as string | null,
+    order: null as string[] | null,
+    base: baseRows,
+    onMove,
+  });
+  useEffect(() => {
+    dragRef.current.base = baseRows;
+    dragRef.current.onMove = onMove;
+  }, [baseRows, onMove]);
+
+  function pointerDown(id: string) {
+    if (!canDrag) return;
+    const row = baseRows.find((r) => r.id === id);
+    if (!row || row.type !== "item") return;
+    const initial = baseRows.map((r) => r.id);
+    dragRef.current.id = id;
+    dragRef.current.order = initial;
+    setDragId(id);
+    setOrder(initial);
+
+    function move(ev: { clientY: number }) {
+      const cur = dragRef.current.order;
+      const list = listRef.current;
+      const drag = dragRef.current.id;
+      if (!drag || !cur || !list) return;
+      const kids = [...list.children] as HTMLElement[];
+      let insert = kids.length;
+      for (let i = 0; i < kids.length; i++) {
+        const box = kids[i].getBoundingClientRect();
+        if (ev.clientY < box.top + box.height / 2) {
+          insert = i;
+          break;
+        }
+      }
+      const rest = cur.filter((x) => x !== drag);
+      const from = cur.indexOf(drag);
+      const at = insert > from ? insert - 1 : insert;
+      const next = [...rest.slice(0, at), drag, ...rest.slice(at)];
+      if (next.some((x, i) => x !== cur[i])) {
+        dragRef.current.order = next;
+        setOrder(next);
+      }
+    }
+    function up() {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", up);
+      window.removeEventListener("mousemove", move);
+      window.removeEventListener("mouseup", up);
+      const drag = dragRef.current.id;
+      const cur = dragRef.current.order;
+      const base = dragRef.current.base;
+      dragRef.current.id = null;
+      dragRef.current.order = null;
+      setDragId(null);
+      setOrder(null);
+      if (!drag || !cur) return;
+      const ordered = cur.flatMap((x) => {
+        const r = base.find((row) => row.id === x);
+        return r ? [r] : [];
+      });
+      const idx = ordered.findIndex((r) => r.id === drag);
+      const dropped = ordered[idx];
+      if (!dropped || dropped.type !== "item" || idx < 0) return;
+      const startMin =
+        idx === 0 ? toMinutes(dropped.item.start || "08:00") : snap5(endsAt(ordered[idx - 1]));
+      const start = hhmmOf(Math.max(0, startMin));
+      if (start !== dropped.item.start) dragRef.current.onMove(dropped.item, start);
+    }
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", up);
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", up);
+  }
 
   return (
-    <ul className="space-y-2">
-      {rows.map((r, k) =>
+    <ul ref={listRef} className="space-y-2">
+      {rows.map((r) =>
         r.type === "class" ? (
           <li
-            key={`c${k}`}
+            key={r.id}
             className="flex items-center gap-3 rounded-xl border border-dashed border-border/80 bg-soft/70 px-3 py-2 text-sm"
           >
+            {canDrag && <span className="w-5 shrink-0" aria-hidden />}
             <span className="w-11 shrink-0 tabular-nums text-muted-foreground">{r.cls.start}</span>
             {r.cls.point ? (
               <span className="mx-[-2px] size-2 rounded-full border-2 bg-card" style={{ borderColor: r.cls.color }} />
@@ -661,16 +785,19 @@ function Timeline({
           </li>
         ) : (
           <ItemRow
-            key={r.item.id}
+            key={r.id}
             item={r.item}
             readOnly={readOnly}
             future={future}
+            dragging={dragId === r.id}
+            canDrag={canDrag}
             fraction={frac(r.item)}
             overall={sourceProgress(r.item, src)}
             workoutLogged={r.item.kind === "workout" && !!src.fitness?.sessions.some((s) => s.date === src.date)}
             waitFor={r.item.kind === "unit" && r.item.refId ? blockers?.get(r.item.refId) : undefined}
             onProgress={(p) => onProgress(r.item, p)}
             onEdit={() => onEdit(r.item)}
+            onDragHandleDown={() => pointerDown(r.id)}
           />
         ),
       )}
@@ -686,8 +813,11 @@ function ItemRow({
   overall,
   workoutLogged,
   waitFor,
+  canDrag,
+  dragging,
   onProgress,
   onEdit,
+  onDragHandleDown,
 }: {
   item: PlanItem;
   readOnly: boolean;
@@ -698,8 +828,11 @@ function ItemRow({
   workoutLogged: boolean;
   /** title of the unit that has to be finished before this one can start */
   waitFor?: string;
+  canDrag?: boolean;
+  dragging?: boolean;
   onProgress: (pct: number) => void;
   onEdit: () => void;
+  onDragHandleDown?: () => void;
 }) {
   const Icon = KIND_ICON[item.kind];
   const color = CATEGORY_COLOR[CATEGORY_OF[item.kind]];
@@ -728,9 +861,22 @@ function ItemRow({
 
   return (
     <li
-      className={`rounded-xl border bg-card px-3 py-3 transition-colors ${done ? "border-border/50 bg-soft/60" : "border-border/70"}`}
+      className={`rounded-xl border bg-card px-3 py-3 transition-colors ${
+        dragging ? "border-chip shadow-md" : done ? "border-border/50 bg-soft/60" : "border-border/70"
+      }`}
     >
       <div className="flex items-start gap-3">
+        {canDrag && (
+          <button
+            type="button"
+            className="mt-0.5 touch-none text-muted-foreground hover:text-ink"
+            aria-label={`拖移 ${item.title}`}
+            onPointerDown={onDragHandleDown}
+            onMouseDown={onDragHandleDown}
+          >
+            <GripVertical className="size-4" />
+          </button>
+        )}
         <span className="w-11 shrink-0 pt-0.5 text-sm tabular-nums text-muted-foreground">
           {item.start || "—"}
         </span>
@@ -838,7 +984,7 @@ function ItemDialog({
           )}
           <div className="grid gap-2">
             <Label htmlFor="pi-start">開始時間</Label>
-            <Input id="pi-start" type="time" value={start} onChange={(e) => setStart(e.target.value)} />
+            <TimeField id="pi-start" value={start} onChange={setStart} />
           </div>
           <MinutesField id="pi-min" label="今天要花的時間" value={minutes} onChange={setMinutes} />
           {(item.kind === "homework" || item.kind === "unit") && (
@@ -857,14 +1003,20 @@ function ItemDialog({
               取消
             </Button>
             <Button
-              disabled={!minutes || (custom && !title.trim())}
+              disabled={!minutes || (custom && !title.trim()) || !!(start && !parseTime(start))}
               onClick={() => {
                 const m = minutes ?? item.minutes;
                 let share = item.share;
                 if ((item.kind === "homework" || item.kind === "unit") && item.share !== undefined && item.minutes > 0) {
                   share = Math.min(100 - (item.base ?? 0), Math.round(((item.share * m) / item.minutes) * 10) / 10);
                 }
-                onSave({ ...item, title: custom ? title.trim() : item.title, start, minutes: m, share });
+                onSave({
+                  ...item,
+                  title: custom ? title.trim() : item.title,
+                  start: parseTime(start) ?? "",
+                  minutes: m,
+                  share,
+                });
               }}
             >
               儲存
@@ -954,7 +1106,7 @@ function AddDialog({
             <MinutesField id="add-min" label="要花的時間" value={minutes} onChange={setMinutes} />
             <div className="grid gap-2">
               <Label htmlFor="add-start">開始時間（選填）</Label>
-              <Input id="add-start" type="time" value={start} onChange={(e) => setStart(e.target.value)} />
+              <TimeField id="add-start" value={start} onChange={setStart} />
             </div>
           </div>
         )}
@@ -963,10 +1115,11 @@ function AddDialog({
             取消
           </Button>
           <Button
-            disabled={!minutes || (tab === "custom" ? !title.trim() : !picked)}
+            disabled={!minutes || (tab === "custom" ? !title.trim() : !picked) || !!(start && !parseTime(start))}
             onClick={() => {
               const m = minutes ?? 30;
-              if (tab === "school" && picked) onAdd({ ...workItem(picked, m), start });
+              const startOk = parseTime(start) ?? "";
+              if (tab === "school" && picked) onAdd({ ...workItem(picked, m), start: startOk });
               else
                 onAdd({
                   id: uid("pi"),
@@ -974,7 +1127,7 @@ function AddDialog({
                   title: title.trim(),
                   detail: "",
                   minutes: m,
-                  start,
+                  start: startOk,
                   progress: 0,
                 });
             }}
@@ -1009,11 +1162,11 @@ function SettingsDialog({
           <div className="grid grid-cols-2 gap-3">
             <div className="grid gap-2">
               <Label htmlFor="ps-start">一天從</Label>
-              <Input id="ps-start" type="time" value={s.dayStart} onChange={(e) => setS({ ...s, dayStart: e.target.value })} />
+              <TimeField id="ps-start" value={s.dayStart} onChange={(dayStart) => setS({ ...s, dayStart })} />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="ps-end">到</Label>
-              <Input id="ps-end" type="time" value={s.dayEnd} onChange={(e) => setS({ ...s, dayEnd: e.target.value })} />
+              <TimeField id="ps-end" value={s.dayEnd} onChange={(dayEnd) => setS({ ...s, dayEnd })} />
             </div>
           </div>
           <MinutesField
@@ -1033,8 +1186,17 @@ function SettingsDialog({
             取消
           </Button>
           <Button
-            disabled={!budget || !s.dayStart || !s.dayEnd || toMinutes(s.dayEnd) <= toMinutes(s.dayStart)}
-            onClick={() => budget && onSave({ ...s, studyBudget: budget })}
+            disabled={
+              !budget ||
+              !parseTime(s.dayStart) ||
+              !parseTime(s.dayEnd) ||
+              toMinutes(parseTime(s.dayEnd)!) <= toMinutes(parseTime(s.dayStart)!)
+            }
+            onClick={() => {
+              const dayStart = parseTime(s.dayStart);
+              const dayEnd = parseTime(s.dayEnd);
+              if (budget && dayStart && dayEnd) onSave({ dayStart, dayEnd, studyBudget: budget });
+            }}
           >
             儲存
           </Button>

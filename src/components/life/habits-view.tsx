@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { TimeField, parseTime } from "@/components/time-field";
 import { Label } from "@/components/ui/label";
 import { isoWeekday, toDateKey, WEEKDAYS } from "@/lib/dates";
 import { HABIT_ICONS, HABIT_PRESETS, type Habit } from "@/lib/life";
@@ -238,7 +239,7 @@ function HabitDialog({ habit, onClose }: { habit: Habit | null; onClose: () => v
 
   function submit() {
     if (!valid) return;
-    const fields = { title: title.trim(), icon, days, minutes: minutes ?? 15, time };
+    const fields = { title: title.trim(), icon, days, minutes: minutes ?? 15, time: parseTime(time) ?? "" };
     if (habit) updateHabit(habit.id, fields);
     else addHabit(fields);
     onClose();
@@ -343,7 +344,7 @@ function HabitDialog({ habit, onClose }: { habit: Habit | null; onClose: () => v
           />
           <div className="grid gap-2">
             <Label htmlFor="habit-time">習慣時間（選填）</Label>
-            <Input id="habit-time" type="time" value={time} onChange={(e) => setTime(e.target.value)} />
+            <TimeField id="habit-time" value={time} onChange={setTime} />
           </div>
         </div>
         <DialogFooter className="sm:justify-between">
