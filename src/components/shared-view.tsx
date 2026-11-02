@@ -10,10 +10,11 @@ import { GamesView, type GameId } from "@/components/games/games-view";
 import { PenaltyView } from "@/components/games/penalty-view";
 import { MeetingsView } from "@/components/meetings-view";
 import { MonthCalendar } from "@/components/month-calendar";
+import { TasksView } from "@/components/tasks-view";
 import { formatShortDate, toDateKey } from "@/lib/dates";
 import { formatTodoTime, METRICS, sortSchedule } from "@/lib/life";
 import { usePeopleData, type PersonData } from "@/store/people-data";
-import { ChevronRight, Gamepad2, NotebookPen } from "lucide-react";
+import { ChevronRight, Gamepad2, NotebookPen, Target } from "lucide-react";
 
 export type Person = { userId: string; name: string; color: string; isMe: boolean };
 
@@ -28,7 +29,7 @@ type AgendaItem = {
 };
 
 export function SharedView({ people }: { people: Person[] }) {
-  const [screen, setScreen] = useState<"home" | "games" | "meetings" | GameId>("home");
+  const [screen, setScreen] = useState<"home" | "games" | "meetings" | "tasks" | GameId>("home");
   const go = (next: typeof screen) => {
     setScreen(next);
     window.scrollTo({ top: 0 });
@@ -45,6 +46,8 @@ export function SharedView({ people }: { people: Person[] }) {
       return <GamesView onBack={() => go("home")} onOpen={go} />;
     case "meetings":
       return <MeetingsView people={people} onBack={() => go("home")} />;
+    case "tasks":
+      return <TasksView people={people} onBack={() => go("home")} />;
     case "ab":
       return <AbGameView {...gameProps} />;
     case "battleship":
@@ -59,6 +62,7 @@ export function SharedView({ people }: { people: Person[] }) {
       people={people}
       onOpenGames={() => go("games")}
       onOpenMeetings={() => go("meetings")}
+      onOpenTasks={() => go("tasks")}
     />
   );
 }
@@ -67,10 +71,12 @@ function SharedHome({
   people,
   onOpenGames,
   onOpenMeetings,
+  onOpenTasks,
 }: {
   people: Person[];
   onOpenGames: () => void;
   onOpenMeetings: () => void;
+  onOpenTasks: () => void;
 }) {
   const { data, loaded } = usePeopleData(people.map((p) => p.userId));
   const today = toDateKey(new Date());
@@ -98,6 +104,20 @@ function SharedHome({
         <span className="min-w-0 flex-1">
           <span className="font-display block text-lg text-ink">會議</span>
           <span className="block truncate text-xs text-muted-foreground">議程、討論內容、決議與待辦</span>
+        </span>
+        <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+      </button>
+      <button
+        type="button"
+        onClick={onOpenTasks}
+        className="flex w-full items-center gap-3 rounded-2xl border border-border/70 bg-card p-4 text-left transition-colors hover:border-slate-300"
+      >
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-wash text-ink">
+          <Target className="size-5" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="font-display block text-lg text-ink">指派任務</span>
+          <span className="block truncate text-xs text-muted-foreground">給連結的人下任務，設定期限和獎勵</span>
         </span>
         <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
       </button>
