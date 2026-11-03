@@ -357,9 +357,10 @@ function buildDay(input: PlannerInput): { plan: DayPlan; shortfalls: Shortfall[]
     dismissed.has(`${kind}:${ref}`) || keptRefs.has(`${kind}:${ref}`);
 
   const fixed: PlanItem[] = [];
-  const add = (kind: PlanItemKind, refId: string, title: string, detail: string, minutes: number, start = "") => {
+  // A time that comes from the source (待辦、家事的時間) stays put when the list is reordered.
+  const add = (kind: PlanItemKind, refId: string, title: string, detail: string, minutes: number, start = "", pin = !!start) => {
     if (skip(kind, refId)) return;
-    fixed.push({ id: autoId(kind, refId), kind, refId, title, detail, minutes, start, progress: 0 });
+    fixed.push({ id: autoId(kind, refId), kind, refId, title, detail, minutes, start, progress: 0, ...(pin ? { pinned: true } : {}) });
   };
 
   const courseName = new Map(school.courses.map((c) => [c.id, c.name]));
@@ -385,6 +386,7 @@ function buildDay(input: PlannerInput): { plan: DayPlan; shortfalls: Shortfall[]
         t.date < date ? `待辦・原本 ${formatShortDate(t.date)}` : "待辦",
         todoMinutes(t),
         t.time,
+        !!t.time && t.date === date,
       );
     }
   }
@@ -553,6 +555,15 @@ function buildDay(input: PlannerInput): { plan: DayPlan; shortfalls: Shortfall[]
   };
 }
 
+/**
+ * A plan stored before its day arrived only holds hand edits (items added or moved there,
+ * things removed). It still has to be generated around those edits.
+ */
+export function isDraftPlan(date: string, plan: DayPlan) {
+  const made = new Date(plan.generatedAt);
+  return Number.isNaN(made.getTime()) || toDateKey(made) < date;
+}
+
 export function generatePlan(input: PlannerInput): DayPlan {
   return buildDay(input).plan;
 }
@@ -683,7 +694,7 @@ export function planAhead(
   const usedActions = new Set<string>();
   for (let d = from; d <= to; d = toDateKey(addDays(parseISO(d), 1))) {
     const plan =
-      d === from && stored[d]
+      d === from && stored[d] && !isDraftPlan(d, stored[d])
         ? stored[d]
         : generatePlan({
             ...base,

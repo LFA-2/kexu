@@ -2,11 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { addDays, format, parseISO, startOfWeek } from "date-fns";
-import { DayTimeline, timelineRange } from "@/components/day-timeline";
-import { DayRail, type RailPin } from "@/components/today/day-rail";
+import { CATEGORY_COLOR, DayRail, type RailPin } from "@/components/today/day-rail";
+import { DayStrip } from "@/components/today/day-strip";
+import { ItemPanel } from "@/components/today/item-panel";
 import { WeekView } from "@/components/today/week-view";
 import { zhTW } from "date-fns/locale";
-import { BarChart, ProgressRing, SegmentBar, SERIES } from "@/components/charts";
+import { BarChart, ProgressRing, SegmentBar } from "@/components/charts";
 import { MinutesField } from "@/components/minutes-field";
 import { Button } from "@/components/ui/button";
 import {
@@ -34,17 +35,20 @@ import {
   CATEGORY_LABEL,
   CATEGORY_OF,
   generatePlan,
+  isDraftPlan,
   itemFraction,
   openWork,
   planAhead,
   planCompletion,
   planShortfalls,
   sortItems,
+  sourceProgress,
   unitBlockers,
   workItem,
   type LiveSources,
   type OpenAction,
 } from "@/lib/planner";
+import { hhmm, reflow, type Interval } from "@/lib/reflow";
 import { formatMinutes } from "@/lib/types";
 import { uid } from "@/lib/utils";
 import { useFitness } from "@/store/fitness-store";
@@ -59,18 +63,15 @@ import {
   Plus,
   RefreshCw,
   Settings2,
-  Trash2,
 } from "lucide-react";
 
-const CATEGORY_COLOR = {
-  school: SERIES[0],
-  chores: SERIES[1],
-  workout: SERIES[2],
-  todo: SERIES[3],
-  other: SERIES[4],
-} as const;
+const LAST_START = 23 * 60 + 55;
+const minuteNow = () => {
+  const now = new Date();
+  return now.getHours() * 60 + now.getMinutes();
+};
 
-export function TodayView({ me, isMine, color }: { me: string; isMine: boolean; color: string }) {
+export function TodayView({ me, isMine }: { me: string; isMine: boolean; color?: string }) {
   const school = useSchool();
   const life = useLife();
   const fitness = useFitness();
@@ -94,8 +95,14 @@ export function TodayView({ me, isMine, color }: { me: string; isMine: boolean; 
     ) : null;
   const [date, setDate] = useState(todayKey);
   const [meetings, setMeetings] = useState<Meeting[] | null>(isMine ? null : []);
-  const [editing, setEditing] = useState<PlanItem | null>(null);
-  const [adding, setAdding] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [adding, setAdding] = useState<{ start?: string } | null>(null);
+  const [flashId, setFlashId] = useState<string | null>(null);
+  const [clock, setClock] = useState(minuteNow);
+  useEffect(() => {
+    const t = setInterval(() => setClock(minuteNow()), 60_000);
+    return () => clearInterval(t);
+  }, []);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [mode, setMode] = useState<"day" | "week">("day");
   const [adjustingDate, setAdjustingDate] = useState<string | null>(null);
@@ -155,8 +162,11 @@ export function TodayView({ me, isMine, color }: { me: string; isMine: boolean; 
       aheadTo,
         life.plans ?? {},
       );
-  const planFor = (d: string): DayPlan | undefined =>
-    d > todayKey || (d === todayKey && !life.plans?.[d]) ? ahead[d] : life.plans?.[d];
+  // A plan stored ahead of its day only holds hand edits until that day is planned.
+  const planFor = (d: string): DayPlan | undefined => {
+    const stored = life.plans?.[d];
+    return d > todayKey || (d === todayKey && (!stored || isDraftPlan(d, stored))) ? ahead[d] : stored;
+  };
   const isFuture = date > todayKey;
   const plan = planFor(date);
   const items = sortItems(plan?.items ?? []);
@@ -183,10 +193,12 @@ export function TodayView({ me, isMine, color }: { me: string; isMine: boolean; 
   // First visit to a day (today or later): make a plan automatically.
   const autoDone = useRef(new Set<string>());
   useEffect(() => {
-    if (readOnly || !loaded || meetings === null || life.plans?.[date] || date !== todayKey) return;
+    const stored = life.plans?.[date];
+    if (readOnly || !loaded || meetings === null || date !== todayKey) return;
+    if (stored && !isDraftPlan(date, stored)) return;
     if (autoDone.current.has(date)) return;
     autoDone.current.add(date);
-    life.updatePlan(date, (prev) => prev ?? build());
+    life.updatePlan(date, (prev) => (prev && !isDraftPlan(date, prev) ? prev : build(prev)));
   }, [readOnly, loaded, meetings, date, todayKey, life, build]);
 
   const shortfalls = useMemo(
@@ -382,27 +394,107 @@ export function TodayView({ me, isMine, color }: { me: string; isMine: boolean; 
     });
   }
 
-  function commitMoves(updates: { id: string; start: string }[]) {
-    if (updates.length === 0) return;
-    const map = new Map(updates.map((u) => [u.id, u.start]));
+  // ---- Order first, times follow ----
+  const isToday = date === todayKey;
+  const canFlow = !readOnly && !isFuture;
+  const flowNow = isToday ? clock : null;
+  const dayStartMin = toMinutes((life.planSettings ?? DEFAULT_PLAN_SETTINGS).dayStart);
+  /** Items that keep their time: pinned, finished, or being done right now. */
+  const lockedItem = (i: PlanItem) =>
+    !!i.pinned ||
+    frac(i) >= 1 ||
+    (flowNow !== null && !!i.start && toMinutes(i.start) <= flowNow && flowNow < toMinutes(i.start) + i.minutes);
+  const movableOf = (list: PlanItem[]) => sortItems(list).filter((i) => !lockedItem(i)).map((i) => i.id);
+  const movableOrder = canFlow ? movableOf(items) : [];
+
+  function timesFor(list: PlanItem[], order: string[], fill = false) {
+    const blocked: Interval[] = [
+      ...pins
+        .filter((p) => !p.point && p.end)
+        .map((p): Interval => {
+          const a = toMinutes(p.start);
+          let b = toMinutes(p.end ?? p.start);
+          if (b <= a) b += 24 * 60;
+          return [a, b];
+        }),
+      ...list
+        .filter((i) => i.start && lockedItem(i) && frac(i) < 1)
+        .map((i): Interval => [toMinutes(i.start), toMinutes(i.start) + i.minutes]),
+    ];
+    const byId = new Map(list.map((i) => [i.id, i]));
+    const flow = order.flatMap((id) => {
+      const it = byId.get(id);
+      return it ? [{ id, dur: it.minutes }] : [];
+    });
+    return reflow(flow, blocked, Math.max(dayStartMin, flowNow ?? 0), fill);
+  }
+
+  /** Change the day's items, then lay the movable ones out again from now. */
+  function flowPlan(change: (list: PlanItem[]) => { items: PlanItem[]; order?: string[]; fill?: boolean }) {
     life.updatePlan(date, (prev) => {
-      const base = prev ?? plan;
+      const base = prev && !(isToday && isDraftPlan(date, prev)) ? prev : plan;
       if (!base) return prev;
+      const r = change(base.items);
+      const map = timesFor(r.items, r.order ?? movableOf(r.items), r.fill);
       return {
         ...base,
-        items: base.items.map((i) => (map.has(i.id) ? { ...i, start: map.get(i.id) ?? i.start, manual: true } : i)),
+        items: r.items.map((i) => {
+          const m = map.get(i.id);
+          return m === undefined ? i : { ...i, start: hhmm(Math.min(m, LAST_START)), manual: true };
+        }),
       };
     });
   }
 
+  function saveFromPanel(before: PlanItem, next: PlanItem, follow: boolean) {
+    const timing =
+      follow || next.start !== before.start || next.minutes !== before.minutes || !!next.pinned !== !!before.pinned;
+    if (!canFlow || !timing) {
+      saveItem({ ...next, manual: true });
+      return;
+    }
+    flowPlan((list) => {
+      const updated = list.map((i) => (i.id === next.id ? { ...next, manual: true } : i));
+      // Following keeps its place in the order; otherwise the new time decides it.
+      return { items: updated, order: follow ? movableOf(list).filter((id) => updated.some((u) => u.id === id && !u.pinned)) : undefined };
+    });
+  }
+
+  function moveToTomorrow(item: PlanItem) {
+    const tomorrow = toDateKey(addDays(parseISO(todayKey), 1));
+    const carried: PlanItem = { ...item, id: uid("pi"), start: "", progress: 0, pinned: false, manual: true };
+    if ((item.kind === "homework" || item.kind === "unit") && item.share !== undefined) {
+      const now = sourceProgress(item, src) ?? item.base ?? 0;
+      const goal = Math.min(100, (item.base ?? 0) + item.share);
+      carried.base = now;
+      carried.share = Math.round(Math.min(100 - now, Math.max(goal - now, 0) || item.share) * 10) / 10;
+    }
+    life.updatePlan(tomorrow, (prev) => {
+      const base = prev ?? { generatedAt: new Date().toISOString(), items: [] };
+      const same = (i: PlanItem) => !!item.refId && i.kind === item.kind && i.refId === item.refId;
+      return {
+        ...base,
+        items: [...base.items.filter((i) => !same(i)), carried],
+        dismissed: (base.dismissed ?? []).filter((d) => d !== `${item.kind}:${item.refId}`),
+      };
+    });
+    removeItem(item);
+  }
+
+  function pick(id: string) {
+    setFlashId(id);
+    document.querySelector(`[data-task-id="${id}"]`)?.scrollIntoView({ block: "center", behavior: "smooth" });
+    setTimeout(() => setFlashId((cur) => (cur === id ? null : cur)), 1600);
+  }
+
   if (!loaded) return <p className="py-16 text-center text-sm text-muted-foreground">載入中…</p>;
 
-  const daySchedule = sortSchedule(life.schedule?.[date] ?? []);
   const dateLabel = format(parseISO(date), "M 月 d 日 EEEE", { locale: zhTW });
   const isPast = date < todayKey;
   const settings = life.planSettings ?? DEFAULT_PLAN_SETTINGS;
   const adjusting = adjustingDate === date;
-  const canAdjust = !readOnly && !isFuture && items.some((i) => i.start);
+  const canAdjust = canFlow && movableOrder.length > 0;
+  const editing = editingId ? items.find((i) => i.id === editingId) ?? null : null;
 
   const modeToggle = (
     <div className="flex rounded-xl border border-border/80 bg-card p-0.5 shadow-sm">
@@ -489,15 +581,24 @@ export function TodayView({ me, isMine, color }: { me: string; isMine: boolean; 
         </div>
       </header>
 
-      <section className="rounded-2xl border border-border/70 bg-card p-4 sm:p-5">
-        <h3 className="font-display text-lg text-ink">行程</h3>
-        {daySchedule.length === 0 && (
-          <p className="mt-1 text-sm text-muted-foreground">這天沒有行程</p>
-        )}
-        <div className="mt-3">
-          <DayTimeline items={daySchedule} color={color} range={timelineRange([daySchedule])} />
-        </div>
-      </section>
+      {(items.some((i) => i.start) || pins.length > 0) && (
+        <section className="rounded-2xl border border-border/70 bg-card p-4 sm:p-5">
+          <div className="mb-3 flex items-baseline justify-between gap-2">
+            <h3 className="font-display text-lg text-ink">時間條</h3>
+            <p className="text-[11px] text-muted-foreground">斜線是上課和行程・點色塊跳到那件事</p>
+          </div>
+          <DayStrip
+            items={items}
+            pins={pins}
+            colors={CATEGORY_COLOR}
+            frac={frac}
+            dayStart={toMinutes(settings.dayStart)}
+            dayEnd={toMinutes(settings.dayEnd)}
+            now={isToday && clock >= 0 ? clock : null}
+            onPick={pick}
+          />
+        </section>
+      )}
 
       <section className="grid gap-4 rounded-2xl border border-border/70 bg-card p-4 sm:grid-cols-[auto_1fr] sm:p-5">
         <div className="flex items-center gap-4 sm:flex-col sm:items-center">
@@ -555,7 +656,7 @@ export function TodayView({ me, isMine, color }: { me: string; isMine: boolean; 
               </Button>
             )}
             {!readOnly && (
-              <Button size="sm" className="gap-1" onClick={() => setAdding(true)}>
+              <Button size="sm" className="gap-1" onClick={() => setAdding({})}>
                 <Plus className="size-3.5" />
                 新增
               </Button>
@@ -563,7 +664,10 @@ export function TodayView({ me, isMine, color }: { me: string; isMine: boolean; 
           </div>
         </div>
         {adjusting && canAdjust && (
-          <p className="text-xs text-muted-foreground">上下拖改時間，往旁邊拉可改順序。今明行程不會動。</p>
+          <p className="rounded-lg bg-soft px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+            按住右邊的 ⋮⋮ 拖，或按 ↑↓ 換順序。時間會{isToday ? "從現在開始" : ""}自動一件接一件往下排，避開上課和行程；
+            📌 固定時間、已完成的事不會動。點一件事可以改時間長度或固定時間。
+          </p>
         )}
         {!readOnly && date === todayKey && shortfalls.length > 0 && (
           <div className="rounded-xl bg-amber-50 px-3 py-2.5 text-sm text-amber-900 ring-1 ring-amber-300/80">
@@ -585,22 +689,23 @@ export function TodayView({ me, isMine, color }: { me: string; isMine: boolean; 
           </p>
         ) : (
           <DayRail
-            date={date}
             items={items}
             pins={pins}
             adjusting={adjusting && canAdjust}
             readOnly={readOnly}
-            future={isFuture}
             frac={frac}
-            src={src}
             blockers={isFuture ? undefined : blockers}
-            dayStart={toMinutes(settings.dayStart)}
             dayEnd={toMinutes(settings.dayEnd)}
-            onProgress={setProgress}
-            onEdit={setEditing}
-            onRemove={readOnly ? undefined : removeItem}
-            onCommit={commitMoves}
+            now={flowNow}
+            order={movableOrder}
+            preview={(order) => timesFor(items, order)}
+            gapActions={canFlow}
+            flashId={flashId}
+            onReorder={(order) => flowPlan((list) => ({ items: list, order }))}
+            onOpen={(i) => setEditingId(i.id)}
             onCancelPin={readOnly ? undefined : cancelPin}
+            onFillGaps={canFlow ? () => flowPlan((list) => ({ items: list, fill: true })) : undefined}
+            onAddAt={readOnly || isPast ? undefined : (start) => setAdding({ start })}
           />
         )}
         {!readOnly && held.length > 0 && (
@@ -628,27 +733,46 @@ export function TodayView({ me, isMine, color }: { me: string; isMine: boolean; 
       </section>
 
       {editing && (
-        <ItemDialog
+        <ItemPanel
+          key={editing.id}
           item={editing}
-          onClose={() => setEditing(null)}
-          onSave={(i) => {
-            saveItem({ ...i, manual: true });
-            setEditing(null);
+          color={CATEGORY_COLOR[CATEGORY_OF[editing.kind]]}
+          fraction={frac(editing)}
+          overall={sourceProgress(editing, src)}
+          workoutLogged={editing.kind === "workout" && !!fitness.sessions.some((s) => s.date === date)}
+          waitFor={!isFuture && editing.kind === "unit" && editing.refId ? blockers.get(editing.refId) : undefined}
+          readOnly={readOnly}
+          future={isFuture}
+          canMove={canFlow}
+          onProgress={(p) => setProgress(editing, p)}
+          onSave={(next, follow) => {
+            saveFromPanel(editing, next, follow);
+            setEditingId(null);
           }}
           onRemove={() => {
             removeItem(editing);
-            setEditing(null);
+            setEditingId(null);
           }}
+          onMoveTomorrow={
+            !readOnly && isToday
+              ? () => {
+                  moveToTomorrow(editing);
+                  setEditingId(null);
+                }
+              : undefined
+          }
+          onClose={() => setEditingId(null)}
         />
       )}
       {adding && (
         <AddDialog
           date={date}
+          initialStart={adding.start}
           inPlan={new Set(items.flatMap((i) => (i.refId ? [i.refId] : [])))}
-          onClose={() => setAdding(false)}
+          onClose={() => setAdding(null)}
           onAdd={(i) => {
-            saveItem({ ...i, manual: true });
-            setAdding(false);
+            saveItem({ ...i, manual: true, pinned: !!i.start || undefined });
+            setAdding(null);
           }}
         />
       )}
@@ -667,91 +791,15 @@ export function TodayView({ me, isMine, color }: { me: string; isMine: boolean; 
 }
 
 
-function ItemDialog({
-  item,
-  onClose,
-  onSave,
-  onRemove,
-}: {
-  item: PlanItem;
-  onClose: () => void;
-  onSave: (i: PlanItem) => void;
-  onRemove: () => void;
-}) {
-  const [title, setTitle] = useState(item.title);
-  const [start, setStart] = useState(item.start);
-  const [minutes, setMinutes] = useState<number | null>(item.minutes);
-  const custom = item.kind === "custom";
-
-  return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>調整這一項</DialogTitle>
-          <DialogDescription>改過的項目在「重新排」時會保留。</DialogDescription>
-        </DialogHeader>
-        <div className="grid gap-4 py-2">
-          {custom ? (
-            <div className="grid gap-2">
-              <Label htmlFor="pi-title">名稱</Label>
-              <Input id="pi-title" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={60} />
-            </div>
-          ) : (
-            <p className="text-sm font-medium text-ink">{item.title}</p>
-          )}
-          <div className="grid gap-2">
-            <Label htmlFor="pi-start">開始時間</Label>
-            <TimeField id="pi-start" value={start} onChange={setStart} />
-          </div>
-          <MinutesField id="pi-min" label="今天要花的時間" value={minutes} onChange={setMinutes} />
-          {(item.kind === "homework" || item.kind === "unit") && (
-            <p className="text-xs text-muted-foreground">
-              改時間會同步調整「今天目標」：今天的目標進度會依時間比例變動。
-            </p>
-          )}
-        </div>
-        <DialogFooter className="sm:justify-between">
-          <Button variant="ghost" className="text-muted-foreground hover:text-destructive" onClick={onRemove}>
-            <Trash2 className="size-3.5" />
-            刪除
-          </Button>
-          <div className="flex flex-col-reverse gap-2 sm:flex-row">
-            <Button variant="outline" onClick={onClose}>
-              取消
-            </Button>
-            <Button
-              disabled={!minutes || (custom && !title.trim()) || !!(start && !parseTime(start))}
-              onClick={() => {
-                const m = minutes ?? item.minutes;
-                let share = item.share;
-                if ((item.kind === "homework" || item.kind === "unit") && item.share !== undefined && item.minutes > 0) {
-                  share = Math.min(100 - (item.base ?? 0), Math.round(((item.share * m) / item.minutes) * 10) / 10);
-                }
-                onSave({
-                  ...item,
-                  title: custom ? title.trim() : item.title,
-                  start: parseTime(start) ?? "",
-                  minutes: m,
-                  share,
-                });
-              }}
-            >
-              儲存
-            </Button>
-          </div>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 function AddDialog({
   date,
+  initialStart,
   inPlan,
   onClose,
   onAdd,
 }: {
   date: string;
+  initialStart?: string;
   inPlan: Set<string>;
   onClose: () => void;
   onAdd: (i: PlanItem) => void;
@@ -759,7 +807,7 @@ function AddDialog({
   const school = useSchool();
   const [tab, setTab] = useState<"school" | "custom">("school");
   const [title, setTitle] = useState("");
-  const [start, setStart] = useState("");
+  const [start, setStart] = useState(initialStart ?? "");
   const [minutes, setMinutes] = useState<number | null>(30);
   const all = openWork(date, school);
   const openRefs = new Set(all.map((w) => w.refId));

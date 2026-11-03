@@ -1,45 +1,23 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Button } from "@/components/ui/button";
+import { useRef, useState } from "react";
 import { toMinutes, type PlanItem } from "@/lib/life";
-import {
-  CATEGORY_OF,
-  sourceProgress,
-  type LiveSources,
-} from "@/lib/planner";
-import { reorderRail, shiftRail, type RailBlock } from "@/lib/rail";
+import { CATEGORY_OF } from "@/lib/planner";
+import { hhmm } from "@/lib/reflow";
 import { formatMinutes } from "@/lib/types";
 import { SERIES } from "@/components/charts";
 import {
-  BookOpen,
-  CalendarClock,
-  ClipboardList,
-  Dumbbell,
-  GraduationCap,
-  ListTodo,
+  ArrowDown,
+  ArrowUp,
+  Check,
+  GripVertical,
   Lock,
-  NotebookPen,
-  Pencil,
-  RotateCcw,
-  Sparkles,
-  Trash2,
-  type LucideIcon,
+  Pin,
+  Plus,
+  Rows3,
 } from "lucide-react";
 
-const KIND_ICON: Record<PlanItem["kind"], LucideIcon> = {
-  homework: ClipboardList,
-  unit: BookOpen,
-  exam: GraduationCap,
-  review: RotateCcw,
-  habit: Sparkles,
-  todo: ListTodo,
-  workout: Dumbbell,
-  action: NotebookPen,
-  custom: CalendarClock,
-};
-
-const CATEGORY_COLOR = {
+export const CATEGORY_COLOR = {
   school: SERIES[0],
   chores: SERIES[1],
   workout: SERIES[2],
@@ -47,15 +25,9 @@ const CATEGORY_COLOR = {
   other: SERIES[4],
 } as const;
 
-/** Pixels per minute while adjusting. 10 minutes is one snap, 20px. */
-const PX = 2;
-const PAD = 10;
-/** View mode: hour only, pulled left so the cards get the width. */
-const VIEW_AXIS = { label: 22, pole: 30, card: 44 };
-/** Adjust mode: the full HH:mm scale needs the wider column. */
-const ADJUST_AXIS = { label: 40, pole: 52, card: 66 };
+/** Columns of the compact list: hour label, the thin pole, then the cards. */
+const AXIS = { label: 22, pole: 30, card: 44 };
 const GAP_MIN = 40;
-const SIDEWAYS = 56;
 
 export type RailPin = {
   id: string;
@@ -67,15 +39,7 @@ export type RailPin = {
   point?: boolean;
 };
 
-const hhmm = (min: number) => {
-  const m = Math.max(0, Math.round(min));
-  return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
-};
-
-const hourOnly = (min: number) => String(Math.floor(Math.max(0, Math.round(min)) / 60));
-
-const axisOrigin = (earliest: number) => Math.max(0, Math.floor((earliest - 30) / 60) * 60);
-const axisEnd = (latest: number) => Math.ceil((latest + 20) / 60) * 60;
+const hourOnly = (min: number) => String(Math.floor(Math.max(0, Math.round(min)) / 60) % 24);
 
 function spanMinutes(start: string, end?: string) {
   const a = toMinutes(start);
@@ -85,96 +49,73 @@ function spanMinutes(start: string, end?: string) {
   return b - a;
 }
 
-function toBlocks(items: PlanItem[], pins: RailPin[]): RailBlock[] {
-  return [
-    ...pins
-      .filter((p) => !p.point && p.end)
-      .map((p) => ({
-        id: p.id,
-        start: toMinutes(p.start),
-        dur: Math.max(10, spanMinutes(p.start, p.end)),
-        fixed: true,
-      })),
-    ...items
-      .filter((i) => i.start)
-      .map((i) => ({
-        id: i.id,
-        start: toMinutes(i.start),
-        dur: Math.max(10, i.minutes),
-        fixed: false,
-      })),
-  ];
-}
+type Mark =
+  | { kind: "task"; id: string; item: PlanItem; start: number | null; dur: number }
+  | { kind: "pin"; id: string; pin: RailPin; start: number; dur: number };
 
-type Gesture = {
-  id: string;
-  mode: "time" | "reorder";
-  dx: number;
-  preview: RailBlock[];
-};
-
+/**
+ * Today's list: compact rows in time order. In adjust mode the movable rows get a drag
+ * handle and ↑↓ buttons; the order decides the times, which the parent works out.
+ */
 export function DayRail({
-  date,
   items,
   pins,
   adjusting,
   readOnly,
-  future,
   frac,
-  src,
   blockers,
-  dayStart,
   dayEnd,
-  onProgress,
-  onEdit,
-  onRemove,
-  onCommit,
+  now,
+  order,
+  preview,
+  gapActions,
+  flashId,
+  onReorder,
+  onOpen,
   onCancelPin,
+  onFillGaps,
+  onAddAt,
 }: {
-  date: string;
   items: PlanItem[];
   pins: RailPin[];
   adjusting: boolean;
   readOnly: boolean;
-  future: boolean;
   frac: (i: PlanItem) => number;
-  src: LiveSources;
   blockers?: Map<string, string>;
-  dayStart: number;
   dayEnd: number;
-  onProgress: (i: PlanItem, pct: number) => void;
-  onEdit: (i: PlanItem) => void;
-  onRemove?: (i: PlanItem) => void;
-  onCommit: (updates: { id: string; start: string }[]) => void;
-  /** View mode only. Removes a 今明行程 sign from this day. */
+  /** minute of day, only for today */
+  now: number | null;
+  /** ids of the items that can move, in their current order */
+  order: string[];
+  /** times the movable items would get in a given order */
+  preview: (order: string[]) => Map<string, number>;
+  gapActions: boolean;
+  flashId: string | null;
+  onReorder: (order: string[]) => void;
+  onOpen: (i: PlanItem) => void;
   onCancelPin?: (id: string) => void;
+  onFillGaps?: () => void;
+  onAddAt?: (start: string) => void;
 }) {
-  const railRef = useRef<HTMLDivElement>(null);
-  const [gesture, setGesture] = useState<Gesture | null>(null);
-  const [openId, setOpenId] = useState<string | null>(null);
-  const [openFor, setOpenFor] = useState(date);
-  if (openFor !== date) {
-    setOpenFor(date);
-    setOpenId(null);
-  }
-  if (adjusting && openId) setOpenId(null);
-  const originRef = useRef<number | null>(null);
-  const dragLock = useRef(false);
+  const listRef = useRef<HTMLDivElement>(null);
+  const [drag, setDrag] = useState<{ id: string; order: string[] } | null>(null);
+  const [openGap, setOpenGap] = useState<string | null>(null);
 
-  const blocks = useMemo(() => toBlocks(items, pins), [items, pins]);
-  const starts = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const b of gesture?.preview ?? []) map.set(b.id, b.start);
-    return map;
-  }, [gesture]);
+  const current = drag?.order ?? order;
+  const times = drag ? preview(drag.order) : null;
+  const movable = new Set(order);
+  const rank = new Map(current.map((id, k) => [id, k]));
 
-  const timed = items.filter((i) => i.start);
-  const untimed = items.filter((i) => !i.start);
-
-  const marks = [
-    ...timed.map((item) => {
-      const start = starts.get(item.id) ?? toMinutes(item.start);
-      return { kind: "task" as const, id: item.id, item, start, dur: Math.max(10, item.minutes) };
+  const marks: Mark[] = [
+    ...items.map((item) => {
+      const t = times?.get(item.id);
+      return {
+        kind: "task" as const,
+        id: item.id,
+        item,
+        start: t ?? (item.start ? toMinutes(item.start) : null),
+        dur: Math.max(5, item.minutes),
+      };
     }),
     ...pins.map((pin) => ({
       kind: "pin" as const,
@@ -183,332 +124,304 @@ export function DayRail({
       start: toMinutes(pin.start),
       dur: pin.point ? 0 : spanMinutes(pin.start, pin.end),
     })),
-  ].sort((a, b) => a.start - b.start || (a.kind === "pin" ? -1 : 1));
-
-  const committedEarliest = Math.min(dayStart, ...blocks.map((b) => b.start), 8 * 60);
-  const previewEarliest = gesture ? Math.min(committedEarliest, ...gesture.preview.map((b) => b.start)) : committedEarliest;
-  const origin = axisOrigin(adjusting ? previewEarliest : committedEarliest);
-  const latest = Math.max(
-    dayEnd,
-    ...marks.map((m) => m.start + m.dur),
-    ...blocks.map((b) => b.start + b.dur),
-  );
-  const end = axisEnd(latest);
-
-  useLayoutEffect(() => {
-    if (originRef.current !== null && gesture && originRef.current !== origin) {
-      window.scrollBy(0, (originRef.current - origin) * PX);
+  ].sort((a, b) => {
+    if (a.start === null || b.start === null) {
+      if (a.start === null && b.start === null) return (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0);
+      return a.start === null ? 1 : -1;
     }
-    originRef.current = origin;
-  }, [origin, gesture]);
+    return (
+      a.start - b.start ||
+      (a.kind === b.kind ? 0 : a.kind === "pin" ? -1 : 1) ||
+      (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0)
+    );
+  });
 
-  const yOf = (minute: number) => PAD + (minute - origin) * PX;
+  type Row = { type: "gap"; key: string; from: number; minutes: number } | { type: "mark"; key: string; mark: Mark };
+  const rows: Row[] = [];
+  let prevEnd: number | null = null;
+  for (const mark of marks) {
+    if (mark.start !== null && prevEnd !== null && mark.start - prevEnd >= GAP_MIN) {
+      rows.push({ type: "gap", key: `gap-${mark.id}`, from: prevEnd, minutes: mark.start - prevEnd });
+    }
+    rows.push({ type: "mark", key: mark.id, mark });
+    if (mark.start !== null) prevEnd = Math.max(prevEnd ?? 0, mark.start + mark.dur);
+  }
+  const firstUntimed = rows.findIndex((r) => r.type === "mark" && r.mark.start === null);
 
-  function beginDrag(id: string, clientX: number, clientY: number) {
-    if (dragLock.current) return;
-    const item = timed.find((i) => i.id === id);
-    if (!item || !adjusting) return;
-    dragLock.current = true;
-    const snapshot = blocks.map((b) => ({ ...b }));
-    const original = toMinutes(item.start);
-    let preview: RailBlock[] | null = null;
-    let mode: Gesture["mode"] = "time";
-    let latched = false;
-    let dx = 0;
-    let dy = 0;
+  function move(id: string, d: number) {
+    const k = order.indexOf(id);
+    const j = k + d;
+    if (k < 0 || j < 0 || j >= order.length) return;
+    const next = [...order];
+    [next[k], next[j]] = [next[j], next[k]];
+    onReorder(next);
+  }
 
-    function place(ev: { clientX: number; clientY: number; preventDefault?: () => void }) {
-      ev.preventDefault?.();
-      dx = ev.clientX - clientX;
-      dy = ev.clientY - clientY;
-      if (!latched && Math.abs(dx) > SIDEWAYS && Math.abs(dx) > Math.abs(dy)) latched = true;
-      const sideways = latched;
-      if (sideways) {
-        mode = "reorder";
-        const el = railRef.current;
-        const rect = el?.getBoundingClientRect();
-        const originNow = Number(el?.dataset.origin ?? origin);
-        const minute = rect ? originNow + (ev.clientY - rect.top - PAD) / PX : original;
-        preview = reorderRail(snapshot, id, minute);
-      } else {
-        mode = "time";
-        const delta = Math.round(dy / PX / 10) * 10;
-        preview = shiftRail(snapshot, id, original + delta);
+  function beginDrag(e: React.PointerEvent, id: string) {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    let latest = order;
+    setDrag({ id, order });
+    function place(ev: PointerEvent) {
+      ev.preventDefault();
+      const nodes = [...(listRef.current?.querySelectorAll<HTMLElement>("[data-movable]") ?? [])];
+      const others = latest.filter((x) => x !== id);
+      const above = others.filter((x) => {
+        const el = nodes.find((n) => n.dataset.movable === x);
+        if (!el) return false;
+        const r = el.getBoundingClientRect();
+        return r.top + r.height / 2 < ev.clientY;
+      }).length;
+      const next = [...others.slice(0, above), id, ...others.slice(above)];
+      if (next.join() !== latest.join()) {
+        latest = next;
+        setDrag({ id, order: next });
       }
-      setGesture({ id, mode, dx: sideways ? dx : 0, preview });
+      if (ev.clientY < 70) window.scrollBy(0, -12);
+      else if (ev.clientY > window.innerHeight - 90) window.scrollBy(0, 12);
     }
     function finish() {
-      dragLock.current = false;
       window.removeEventListener("pointermove", place);
       window.removeEventListener("pointerup", finish);
       window.removeEventListener("pointercancel", finish);
-      window.removeEventListener("mousemove", place);
-      window.removeEventListener("mouseup", finish);
-      const result = preview;
-      setGesture(null);
-      if (!result || Math.hypot(dx, dy) < 6) return;
-      const before = new Map(snapshot.filter((b) => !b.fixed).map((b) => [b.id, b.start]));
-      const updates = result.flatMap((b) => {
-        const was = before.get(b.id);
-        if (was === undefined || was === b.start) return [];
-        return [{ id: b.id, start: hhmm(b.start) }];
-      });
-      if (updates.length) onCommit(updates);
+      setDrag(null);
+      if (latest.join() !== order.join()) onReorder(latest);
     }
     window.addEventListener("pointermove", place, { passive: false });
     window.addEventListener("pointerup", finish);
     window.addEventListener("pointercancel", finish);
-    window.addEventListener("mousemove", place);
-    window.addEventListener("mouseup", finish);
-  }
-
-  function onCardDown(e: React.PointerEvent | React.MouseEvent, id: string) {
-    if (!adjusting) return;
-    if ("button" in e && e.button !== 0) return;
-    const target = e.target as HTMLElement;
-    if (target.closest("button, input, a")) return;
-    e.preventDefault();
-    beginDrag(id, e.clientX, e.clientY);
-  }
-
-  const hours: number[] = [];
-  if (adjusting) {
-    for (let m = Math.ceil(origin / 60) * 60; m <= end; m += 60) hours.push(m);
-  }
-
-  const viewRows = (() => {
-    const rows: ({ type: "gap"; key: string; minutes: number } | { type: "mark"; key: string; mark: (typeof marks)[number] })[] = [];
-    let prevEnd: number | null = null;
-    for (const mark of marks) {
-      if (prevEnd !== null && mark.start - prevEnd >= GAP_MIN) {
-        rows.push({ type: "gap", key: `gap-${mark.id}`, minutes: mark.start - prevEnd });
-      }
-      rows.push({ type: "mark", key: mark.id, mark });
-      prevEnd = Math.max(prevEnd ?? 0, mark.start + mark.dur);
-    }
-    return rows;
-  })();
-
-  const axis = adjusting ? ADJUST_AXIS : VIEW_AXIS;
-  function toggle(id: string) {
-    setOpenId((cur) => (cur === id ? null : id));
   }
 
   return (
-    <div className="space-y-3">
-      {marks.length > 0 &&
-        (adjusting ? (
-          <div
-            ref={railRef}
-            data-mode="adjust"
-            data-origin={origin}
-            data-px={PX}
-            className="relative select-none"
-            style={{ height: PAD * 2 + (end - origin) * PX }}
-          >
-            <div className="absolute bottom-0 w-px bg-border" style={{ left: axis.pole, top: 0 }} />
-            {hours.map((m) => (
-              <div
-                key={m}
-                data-hour={hhmm(m).slice(0, 5)}
-                className="absolute text-right text-[11px] tabular-nums text-muted-foreground"
-                style={{ top: yOf(m) - 7, left: 0, width: axis.label }}
-              >
-                {hhmm(m).slice(0, 5)}
-              </div>
-            ))}
-            {marks.map((mark, index) => {
-              const top = yOf(mark.start);
-              const whisker = mark.dur * PX;
-              const color = mark.kind === "task" ? CATEGORY_COLOR[CATEGORY_OF[mark.item.kind]] : mark.pin.color;
-              const height = mark.kind === "task" ? 44 : mark.pin.point ? 32 : Math.max(52, Math.min(whisker - 4, 120));
-              const dragged = gesture?.id === mark.id;
-              return (
-                <div key={mark.id}>
-                  {whisker > 0 && (
-                    <div
-                      className="absolute w-1 rounded-full"
-                      style={{ left: axis.pole - 1.5, top, height: Math.max(whisker, 8), backgroundColor: color, opacity: mark.kind === "pin" ? 0.45 : 0.9 }}
-                    />
-                  )}
-                  <div
-                    className="absolute h-px bg-border"
-                    style={{ left: axis.pole, width: axis.card - axis.pole - 4, top: top + 16 }}
-                  />
-                  <div
-                    className={`absolute ${adjusting && mark.kind === "task" ? "touch-none" : ""} ${dragged ? "z-30" : ""}`}
-                    style={{
-                      top,
-                      height,
-                      left: axis.card,
-                      right: 4,
-                      zIndex: dragged ? 30 : 10 + index,
-                      transform: dragged && gesture?.mode === "reorder" ? `translateX(${Math.max(-28, Math.min(gesture.dx, 72))}px)` : undefined,
-                    }}
-                    onPointerDown={mark.kind === "task" ? (e) => onCardDown(e, mark.id) : undefined}
-                    onMouseDown={mark.kind === "task" ? (e) => onCardDown(e, mark.id) : undefined}
+    <div ref={listRef} data-mode={adjusting ? "adjust" : "view"} className="relative">
+      <div className="absolute bottom-1 top-1 w-px bg-border" style={{ left: AXIS.pole }} />
+      <div className="space-y-2">
+        {rows.map((row, index) => {
+          if (row.type === "gap") {
+            const active = gapActions && (now === null || row.from + row.minutes > now);
+            const open = active && openGap === row.key;
+            return (
+              <div key={row.key} style={{ paddingLeft: AXIS.card }}>
+                {active ? (
+                  <button
+                    type="button"
+                    onClick={() => setOpenGap(open ? null : row.key)}
+                    className="flex h-7 items-center gap-1 text-xs text-muted-foreground hover:text-ink"
+                    aria-expanded={open}
                   >
-                    {mark.kind === "task" ? (
-                      <TaskOnRail
-                        item={mark.item}
-                        start={mark.start}
-                        frac={frac}
-                        src={src}
-                        blockers={blockers}
-                        readOnly={readOnly}
-                        future={future}
-                        expanded={false}
-                        dragging={dragged}
-                        onProgress={onProgress}
-                        onEdit={onEdit}
-                      />
-                    ) : (
-                      <PinCard pin={mark.pin} />
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-            {gesture?.mode === "reorder" && (
-              <div
-                className="absolute z-40 h-0.5 rounded bg-chip"
-                style={{ left: axis.pole - 6, width: 36, top: yOf(starts.get(gesture.id) ?? origin) }}
-              />
-            )}
-          </div>
-        ) : (
-          <div ref={railRef} data-mode="view" className="relative">
-            <div className="absolute bottom-1 top-1 w-px bg-border" style={{ left: axis.pole }} />
-            <div className="space-y-2">
-              {viewRows.map((row) =>
-                row.type === "gap" ? (
-                  <div key={row.key} className="flex h-7 items-center" style={{ paddingLeft: axis.card }}>
-                    <span className="text-xs text-muted-foreground">空了 {formatMinutes(row.minutes)}</span>
-                  </div>
+                    空了 {formatMinutes(row.minutes)}
+                    <span className="underline-offset-2 hover:underline">・用這段空檔</span>
+                  </button>
                 ) : (
-                  <div key={row.key} className="relative" style={{ paddingLeft: axis.card }}>
-                    <span
-                      data-hour={hourOnly(row.mark.start)}
-                      className="absolute top-3 text-right text-[11px] tabular-nums text-muted-foreground"
-                      style={{ left: 0, width: axis.label }}
-                    >
-                      {hourOnly(row.mark.start)}
-                    </span>
-                    <span className="absolute top-4 h-px bg-border" style={{ left: axis.pole, width: axis.card - axis.pole - 4 }} />
-                    <span
-                      className="absolute top-3 size-2 rounded-full border-2 bg-card"
-                      style={{
-                        left: axis.pole - 3.5,
-                        borderColor: row.mark.kind === "task" ? CATEGORY_COLOR[CATEGORY_OF[row.mark.item.kind]] : row.mark.pin.color,
-                      }}
-                    />
-                    {row.mark.kind === "task" ? (
-                      <TaskOnRail
-                        item={row.mark.item}
-                        start={row.mark.start}
-                        frac={frac}
-                        src={src}
-                        blockers={blockers}
-                        readOnly={readOnly}
-                        future={future}
-                        expanded={openId === row.mark.id}
-                        onToggle={() => toggle(row.mark.id)}
-                        onRemove={
-                          !readOnly && onRemove
-                            ? () => {
-                                if (row.mark.kind === "task") onRemove(row.mark.item);
-                              }
-                            : undefined
-                        }
-                        onProgress={onProgress}
-                        onEdit={onEdit}
-                      />
-                    ) : (
-                      <PinCard pin={row.mark.pin} onCancel={onCancelPin ? () => onCancelPin(row.mark.id) : undefined} />
+                  <p className="flex h-7 items-center text-xs text-muted-foreground">空了 {formatMinutes(row.minutes)}</p>
+                )}
+                {open && (
+                  <div className="mb-1 flex flex-wrap gap-2">
+                    {onFillGaps && (
+                      <button
+                        type="button"
+                        className="flex items-center gap-1 rounded-full border border-border/80 bg-card px-3 py-1 text-xs text-ink hover:bg-soft"
+                        onClick={() => {
+                          setOpenGap(null);
+                          onFillGaps();
+                        }}
+                      >
+                        <Rows3 className="size-3.5" />
+                        把後面的事往前補
+                      </button>
+                    )}
+                    {onAddAt && (
+                      <button
+                        type="button"
+                        className="flex items-center gap-1 rounded-full border border-border/80 bg-card px-3 py-1 text-xs text-ink hover:bg-soft"
+                        onClick={() => {
+                          setOpenGap(null);
+                          onAddAt(hhmm(Math.max(row.from, now ?? 0)));
+                        }}
+                      >
+                        <Plus className="size-3.5" />
+                        在 {hhmm(Math.ceil(Math.max(row.from, now ?? 0) / 5) * 5)} 新增
+                      </button>
                     )}
                   </div>
-                ),
+                )}
+              </div>
+            );
+          }
+          const mark = row.mark;
+          const color = mark.kind === "task" ? CATEGORY_COLOR[CATEGORY_OF[mark.item.kind]] : mark.pin.color;
+          return (
+            <div key={row.key}>
+              {index === firstUntimed && (
+                <p className="pb-2 text-xs text-muted-foreground" style={{ paddingLeft: AXIS.card }}>
+                  還沒排時間
+                </p>
               )}
+              <div className="relative" style={{ paddingLeft: AXIS.card }}>
+                {mark.start !== null && (
+                  <span
+                    data-hour={hourOnly(mark.start)}
+                    className="absolute top-3 text-right text-[11px] tabular-nums text-muted-foreground"
+                    style={{ left: 0, width: AXIS.label }}
+                  >
+                    {hourOnly(mark.start)}
+                  </span>
+                )}
+                <span className="absolute top-4 h-px bg-border" style={{ left: AXIS.pole, width: AXIS.card - AXIS.pole - 4 }} />
+                <span
+                  className="absolute top-3 size-2 rounded-full border-2 bg-card"
+                  style={{ left: AXIS.pole - 3.5, borderColor: color }}
+                />
+                {mark.kind === "task" ? (
+                  <TaskRow
+                    item={mark.item}
+                    start={mark.start}
+                    color={color}
+                    fraction={frac(mark.item)}
+                    waitFor={mark.item.kind === "unit" && mark.item.refId ? blockers?.get(mark.item.refId) : undefined}
+                    over={mark.start !== null && mark.start + mark.item.minutes > dayEnd ? hhmm(dayEnd) : null}
+                    adjusting={adjusting && !readOnly}
+                    movable={movable.has(mark.id)}
+                    first={current[0] === mark.id}
+                    last={current[current.length - 1] === mark.id}
+                    dragging={drag?.id === mark.id}
+                    flash={flashId === mark.id}
+                    onOpen={() => onOpen(mark.item)}
+                    onUp={() => move(mark.id, -1)}
+                    onDown={() => move(mark.id, 1)}
+                    onGrab={(e) => beginDrag(e, mark.id)}
+                  />
+                ) : (
+                  <PinCard
+                    pin={mark.pin}
+                    onCancel={!adjusting && onCancelPin ? () => onCancelPin(mark.id) : undefined}
+                  />
+                )}
+              </div>
             </div>
-          </div>
-        ))}
-
-      {untimed.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-xs text-muted-foreground">還沒排時間</p>
-          {untimed.map((item) => (
-            <TaskOnRail
-              key={item.id}
-              item={item}
-              start={null}
-              frac={frac}
-              src={src}
-              blockers={blockers}
-              readOnly={readOnly}
-              future={future}
-              expanded={!adjusting && openId === item.id}
-              onToggle={adjusting ? undefined : () => toggle(item.id)}
-              onRemove={!readOnly && !adjusting && onRemove ? () => onRemove(item) : undefined}
-              onProgress={onProgress}
-              onEdit={onEdit}
-            />
-          ))}
-        </div>
-      )}
+          );
+        })}
+      </div>
     </div>
   );
 }
 
-function TaskOnRail({
+function TaskRow({
   item,
   start,
-  frac,
-  src,
-  blockers,
-  readOnly,
-  future,
-  expanded,
-  onToggle,
-  onRemove,
+  color,
+  fraction,
+  waitFor,
+  over,
+  adjusting,
+  movable,
+  first,
+  last,
   dragging,
-  onProgress,
-  onEdit,
+  flash,
+  onOpen,
+  onUp,
+  onDown,
+  onGrab,
 }: {
   item: PlanItem;
-  /** minute of day, or null when the item has no time yet */
   start: number | null;
-  frac: (i: PlanItem) => number;
-  src: LiveSources;
-  blockers?: Map<string, string>;
-  readOnly: boolean;
-  future: boolean;
-  expanded: boolean;
-  /** Absent while adjusting, so the card stays a drag handle. */
-  onToggle?: () => void;
-  onRemove?: () => void;
-  dragging?: boolean;
-  onProgress: (i: PlanItem, pct: number) => void;
-  onEdit: (i: PlanItem) => void;
+  color: string;
+  fraction: number;
+  waitFor?: string;
+  over: string | null;
+  adjusting: boolean;
+  movable: boolean;
+  first: boolean;
+  last: boolean;
+  dragging: boolean;
+  flash: boolean;
+  onOpen: () => void;
+  onUp: () => void;
+  onDown: () => void;
+  onGrab: (e: React.PointerEvent) => void;
 }) {
+  const done = fraction >= 1;
+  const pct = Math.round(Math.min(1, fraction) * 100);
+  const range = start === null ? "" : `${hhmm(start)}–${hhmm(start + item.minutes)}`;
+  const fill =
+    pct > 0
+      ? `linear-gradient(to right, color-mix(in srgb, ${color} 32%, var(--card)) ${pct}%, transparent ${pct}%)`
+      : undefined;
+  const border = dragging
+    ? "border-chip shadow-md"
+    : over
+      ? "border-amber-400"
+      : flash
+        ? "border-chip ring-2 ring-chip/40"
+        : done
+          ? "border-border/50"
+          : "border-border/70";
+
   return (
-    <div className="h-full" data-task={item.title} data-start={start === null ? "" : hhmm(start)} data-open={expanded ? "true" : "false"}>
-      <TaskCard
-        item={item}
-        startLabel={start === null ? "" : hhmm(start)}
-        endLabel={start === null ? "" : hhmm(start + item.minutes)}
-        fraction={frac(item)}
-        overall={sourceProgress(item, src)}
-        workoutLogged={item.kind === "workout" && !!src.fitness?.sessions.some((s) => s.date === src.date)}
-        waitFor={item.kind === "unit" && item.refId ? blockers?.get(item.refId) : undefined}
-        readOnly={readOnly}
-        future={future}
-        expanded={expanded}
-        onToggle={onToggle}
-        onRemove={onRemove}
-        dragging={dragging}
-        onProgress={(p) => onProgress(item, p)}
-        onEdit={() => onEdit(item)}
-      />
+    <div
+      data-task={item.title}
+      data-task-id={item.id}
+      data-start={start === null ? "" : hhmm(start)}
+      {...(movable && adjusting ? { "data-movable": item.id } : {})}
+      className={`flex items-stretch overflow-hidden rounded-xl border bg-card transition-shadow ${border}`}
+      style={{ backgroundImage: fill }}
+    >
+      <button type="button" onClick={onOpen} className="min-w-0 flex-1 px-2.5 py-2 text-left">
+        <span className="flex items-center gap-2">
+          <span className={`min-w-0 flex-1 truncate text-sm font-medium ${done ? "text-muted-foreground line-through" : "text-ink"}`}>
+            {item.title}
+          </span>
+          {item.pinned && <Pin className="size-3 shrink-0 text-muted-foreground" aria-label="固定時間" />}
+          {waitFor && <Lock className="size-3 shrink-0 text-muted-foreground" aria-label={`等「${waitFor}」`} />}
+          <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+            {range || formatMinutes(item.minutes)}
+          </span>
+        </span>
+        {(adjusting || over) && (
+          <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
+            {formatMinutes(item.minutes)}
+            {over && <span className="text-amber-700">・超過 {over}</span>}
+            {adjusting && !movable && (done ? "・已完成" : item.pinned ? "・固定時間，不會移動" : "・正在做")}
+          </span>
+        )}
+      </button>
+      {adjusting &&
+        (movable ? (
+          <span className="flex shrink-0 items-center border-l border-border/60">
+            <button
+              type="button"
+              onClick={onUp}
+              disabled={first}
+              className="flex h-full w-8 items-center justify-center text-muted-foreground hover:text-ink disabled:opacity-30"
+              aria-label={`${item.title} 往前`}
+            >
+              <ArrowUp className="size-4" />
+            </button>
+            <button
+              type="button"
+              onClick={onDown}
+              disabled={last}
+              className="flex h-full w-8 items-center justify-center text-muted-foreground hover:text-ink disabled:opacity-30"
+              aria-label={`${item.title} 往後`}
+            >
+              <ArrowDown className="size-4" />
+            </button>
+            <span
+              role="button"
+              tabIndex={-1}
+              aria-label={`拖曳 ${item.title}`}
+              onPointerDown={onGrab}
+              className="flex h-full w-9 cursor-grab touch-none items-center justify-center text-muted-foreground active:cursor-grabbing"
+            >
+              <GripVertical className="size-4" />
+            </span>
+          </span>
+        ) : (
+          <span className="flex w-9 shrink-0 items-center justify-center border-l border-border/60 text-muted-foreground">
+            {done ? <Check className="size-4" /> : <Pin className="size-4" />}
+          </span>
+        ))}
     </div>
   );
 }
@@ -518,7 +431,7 @@ function PinCard({ pin, onCancel }: { pin: RailPin; onCancel?: () => void }) {
     <div
       data-pin={pin.title}
       data-start={pin.start}
-      className="flex h-full items-center gap-2 rounded-xl border border-dashed border-border/80 bg-soft/80 px-3 py-1.5 text-sm text-muted-foreground"
+      className="flex items-center gap-2 rounded-xl border border-dashed border-border/80 bg-soft/80 px-3 py-1.5 text-sm text-muted-foreground"
     >
       <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: pin.color }} />
       <span className="min-w-0 flex-1 truncate">
@@ -537,183 +450,6 @@ function PinCard({ pin, onCancel }: { pin: RailPin; onCancel?: () => void }) {
           取消
         </button>
       )}
-    </div>
-  );
-}
-
-function TaskCard({
-  item,
-  startLabel,
-  endLabel,
-  fraction,
-  overall,
-  workoutLogged,
-  waitFor,
-  readOnly,
-  future,
-  expanded,
-  onToggle,
-  onRemove,
-  dragging,
-  onProgress,
-  onEdit,
-}: {
-  item: PlanItem;
-  startLabel: string;
-  endLabel: string;
-  fraction: number;
-  overall: number | null;
-  workoutLogged: boolean;
-  waitFor?: string;
-  readOnly: boolean;
-  future: boolean;
-  expanded: boolean;
-  onToggle?: () => void;
-  onRemove?: () => void;
-  dragging?: boolean;
-  onProgress: (pct: number) => void;
-  onEdit: () => void;
-}) {
-  const Icon = KIND_ICON[item.kind];
-  const color = CATEGORY_COLOR[CATEGORY_OF[item.kind]];
-  const isWork = overall !== null;
-  const value = isWork ? overall : Math.round(fraction * 100);
-  const target = isWork ? Math.min(100, Math.round((item.base ?? 0) + (item.share ?? 0))) : null;
-  const [draft, setDraft] = useState<number | null>(null);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const shown = draft ?? value;
-  const done = fraction >= 1;
-  const locked = readOnly || future || !!waitFor || (item.kind === "workout" && workoutLogged);
-  const range = endLabel && endLabel !== startLabel ? `${startLabel}–${endLabel}` : startLabel;
-  const fill =
-    value > 0
-      ? `linear-gradient(to right, color-mix(in srgb, ${color} 32%, var(--card)) ${Math.min(100, value)}%, transparent ${Math.min(100, value)}%)`
-      : undefined;
-
-  function change(v: number) {
-    setDraft(v);
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => {
-      onProgress(v);
-      setDraft(null);
-    }, 350);
-  }
-  useEffect(() => () => {
-    if (timer.current) clearTimeout(timer.current);
-  }, []);
-
-  if (!expanded) {
-    const className = `flex h-full w-full items-center gap-2 rounded-xl border bg-card px-2.5 text-left ${
-      dragging ? "border-chip shadow-md" : done ? "border-border/50" : "border-border/70"
-    } ${onToggle ? "py-2" : "py-1.5"}`;
-    const body = (
-      <>
-        <span className={`min-w-0 flex-1 truncate text-sm font-medium ${done ? "text-muted-foreground line-through" : "text-ink"}`}>
-          {item.title}
-        </span>
-        {range && <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{range}</span>}
-      </>
-    );
-    if (onToggle) {
-      return (
-        <button type="button" onClick={onToggle} className={className} style={{ backgroundImage: fill }} aria-expanded={false}>
-          {body}
-        </button>
-      );
-    }
-    return (
-      <div className={className} style={{ backgroundImage: fill }}>
-        {body}
-      </div>
-    );
-  }
-
-  return (
-    <div
-      className={`h-full overflow-hidden rounded-xl border bg-card px-2.5 py-1.5 ${
-        dragging ? "border-chip shadow-md" : done ? "border-border/50 bg-soft/60" : "border-border/70"
-      }`}
-    >
-      <div className="flex items-start gap-2">
-        <span
-          className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md text-white"
-          style={{ backgroundColor: color }}
-        >
-          <Icon className="size-3.5" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-1">
-            <button type="button" onClick={onToggle} className="min-w-0 flex-1 text-left" aria-expanded>
-              <p className={`truncate text-sm font-medium ${done ? "text-muted-foreground line-through" : "text-ink"}`}>
-                {item.title}
-              </p>
-              <p className="truncate text-[11px] text-muted-foreground">
-                {range}
-                {item.detail ? `・${item.detail}` : ""}
-                {`・${formatMinutes(item.minutes)}`}
-              </p>
-            </button>
-            {!readOnly && (
-              <span className="flex shrink-0">
-                {onRemove && (
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    className="text-muted-foreground hover:text-destructive"
-                    aria-label={`刪除 ${item.title}`}
-                    onClick={() => {
-                      if (confirm(`從今天拿掉「${item.title}」？重新排不會再把它加回來。`)) onRemove();
-                    }}
-                  >
-                    <Trash2 />
-                  </Button>
-                )}
-                <Button variant="ghost" size="icon-xs" className="shrink-0 text-muted-foreground" onClick={onEdit} aria-label={`編輯 ${item.title}`}>
-                  <Pencil />
-                </Button>
-              </span>
-            )}
-          </div>
-          <div className="mt-1 flex items-center gap-2">
-              <div className="relative min-w-0 flex-1">
-                <input
-                  type="range"
-                  min={0}
-                  max={100}
-                  step={5}
-                  value={shown}
-                  disabled={locked}
-                  onChange={(e) => change(Number(e.target.value))}
-                  className="progress-range w-full"
-                  style={{ "--fill": `${shown}%`, "--accent": color } as React.CSSProperties}
-                  aria-label={`${item.title} 進度`}
-                />
-                {target !== null && target < 100 && (
-                  <span
-                    className="pointer-events-none absolute top-1/2 h-3 w-0.5 -translate-y-1/2 rounded bg-chip"
-                    style={{ left: `calc(${target}% - 1px)` }}
-                  />
-                )}
-              </div>
-              <span className="w-9 shrink-0 text-right text-xs tabular-nums text-ink">{shown}%</span>
-            </div>
-          {waitFor ? (
-            <p className="mt-0.5 flex items-center gap-1 text-[11px] text-muted-foreground">
-              <Lock className="size-3" />
-              完成「{waitFor}」後開始
-            </p>
-          ) : isWork ? (
-            <p className="mt-0.5 text-[11px] text-muted-foreground">
-              整體進度・{future ? "這天目標" : "今天目標"} {target}%{target === 100 ? "（做完）" : ""}
-              {fraction >= 1 && " ✓"}
-            </p>
-          ) : item.kind === "workout" ? (
-            <p className="mt-0.5 text-[11px] text-muted-foreground">
-              {workoutLogged ? "已在「運動」記錄今天的訓練 ✓" : "到「運動」完成訓練會自動打勾"}
-            </p>
-          ) : null}
-        </div>
-      </div>
     </div>
   );
 }

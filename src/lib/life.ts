@@ -126,6 +126,8 @@ export type PlanItem = {
   share?: number;
   /** Added or edited by hand, kept when the plan is regenerated */
   manual?: boolean;
+  /** Time fixed by the user: reordering flows the other items around it */
+  pinned?: boolean;
 };
 
 export type DayPlan = {
