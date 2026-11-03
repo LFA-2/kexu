@@ -23,6 +23,7 @@ import {
   Pencil,
   RotateCcw,
   Sparkles,
+  Trash2,
   type LucideIcon,
 } from "lucide-react";
 
@@ -49,11 +50,8 @@ const CATEGORY_COLOR = {
 /** Pixels per minute while adjusting. 10 minutes is one snap, 20px. */
 const PX = 2;
 const PAD = 10;
-/** View mode: hour only, pulled left so the cards get the width. */
-const VIEW_AXIS = { label: 22, pole: 30, card: 44 };
-/** Adjust mode: the full HH:mm scale needs the wider column. */
-const ADJUST_AXIS = { label: 40, pole: 52, card: 66 };
-const GAP_MIN = 40;
+/** Hour digits only, so the cards can sit close to the scale. */
+const AXIS = { label: 22, pole: 30, card: 44 };
 const SIDEWAYS = 56;
 
 export type RailPin = {
@@ -126,6 +124,7 @@ export function DayRail({
   dayEnd,
   onProgress,
   onEdit,
+  onRemove,
   onCommit,
   onCancelPin,
 }: {
@@ -142,6 +141,7 @@ export function DayRail({
   dayEnd: number;
   onProgress: (i: PlanItem, pct: number) => void;
   onEdit: (i: PlanItem) => void;
+  onRemove?: (i: PlanItem) => void;
   onCommit: (updates: { id: string; start: string }[]) => void;
   /** View mode only. Removes a 今明行程 sign from this day. */
   onCancelPin?: (id: string) => void;
@@ -269,55 +269,41 @@ export function DayRail({
   }
 
   const hours: number[] = [];
-  if (adjusting) {
-    for (let m = Math.ceil(origin / 60) * 60; m <= end; m += 60) hours.push(m);
-  }
+  for (let m = Math.ceil(origin / 60) * 60; m <= end; m += 60) hours.push(m);
 
-  const viewRows = (() => {
-    const rows: ({ type: "gap"; key: string; minutes: number } | { type: "mark"; key: string; mark: (typeof marks)[number] })[] = [];
-    let prevEnd: number | null = null;
-    for (const mark of marks) {
-      if (prevEnd !== null && mark.start - prevEnd >= GAP_MIN) {
-        rows.push({ type: "gap", key: `gap-${mark.id}`, minutes: mark.start - prevEnd });
-      }
-      rows.push({ type: "mark", key: mark.id, mark });
-      prevEnd = Math.max(prevEnd ?? 0, mark.start + mark.dur);
-    }
-    return rows;
-  })();
-
-  const axis = adjusting ? ADJUST_AXIS : VIEW_AXIS;
   function toggle(id: string) {
     setOpenId((cur) => (cur === id ? null : id));
   }
 
   return (
     <div className="space-y-3">
-      {marks.length > 0 &&
-        (adjusting ? (
+      {marks.length > 0 && (
           <div
             ref={railRef}
-            data-mode="adjust"
+            data-mode={adjusting ? "adjust" : "view"}
             data-origin={origin}
             data-px={PX}
-            className="relative select-none"
+            className={`relative ${adjusting ? "select-none" : ""}`}
             style={{ height: PAD * 2 + (end - origin) * PX }}
           >
-            <div className="absolute bottom-0 w-px bg-border" style={{ left: axis.pole, top: 0 }} />
+            <div className="absolute bottom-0 w-px bg-border" style={{ left: AXIS.pole, top: 0 }} />
             {hours.map((m) => (
-              <div
-                key={m}
-                data-hour={hhmm(m).slice(0, 5)}
-                className="absolute text-right text-[11px] tabular-nums text-muted-foreground"
-                style={{ top: yOf(m) - 7, left: 0, width: axis.label }}
-              >
-                {hhmm(m).slice(0, 5)}
+              <div key={m}>
+                <div
+                  data-hour={hourOnly(m)}
+                  className="absolute text-right text-[11px] tabular-nums text-muted-foreground"
+                  style={{ top: yOf(m) - 7, left: 0, width: AXIS.label }}
+                >
+                  {hourOnly(m)}
+                </div>
+                <div className="absolute h-px bg-border" style={{ left: AXIS.pole - 4, width: 8, top: yOf(m) }} />
               </div>
             ))}
             {marks.map((mark, index) => {
               const top = yOf(mark.start);
               const whisker = mark.dur * PX;
               const color = mark.kind === "task" ? CATEGORY_COLOR[CATEGORY_OF[mark.item.kind]] : mark.pin.color;
+              const open = mark.kind === "task" && !adjusting && openId === mark.id;
               const height = mark.kind === "task" ? 44 : mark.pin.point ? 32 : Math.max(52, Math.min(whisker - 4, 120));
               const dragged = gesture?.id === mark.id;
               return (
@@ -325,25 +311,26 @@ export function DayRail({
                   {whisker > 0 && (
                     <div
                       className="absolute w-1 rounded-full"
-                      style={{ left: axis.pole - 1.5, top, height: Math.max(whisker, 8), backgroundColor: color, opacity: mark.kind === "pin" ? 0.45 : 0.9 }}
+                      style={{ left: AXIS.pole - 1.5, top, height: Math.max(whisker, 8), backgroundColor: color, opacity: mark.kind === "pin" ? 0.45 : 0.9 }}
                     />
                   )}
                   <div
                     className="absolute h-px bg-border"
-                    style={{ left: axis.pole, width: axis.card - axis.pole - 4, top: top + 16 }}
+                    style={{ left: AXIS.pole, width: AXIS.card - AXIS.pole - 4, top: top + 16 }}
                   />
                   <div
-                    className={`absolute ${adjusting && mark.kind === "task" ? "touch-none" : ""} ${dragged ? "z-30" : ""}`}
+                    className={`absolute ${adjusting && mark.kind === "task" ? "touch-none" : ""} ${dragged || open ? "z-30" : ""}`}
                     style={{
                       top,
-                      height,
-                      left: axis.card,
+                      height: open ? undefined : height,
+                      minHeight: height,
+                      left: AXIS.card,
                       right: 4,
-                      zIndex: dragged ? 30 : 10 + index,
+                      zIndex: dragged || open ? 30 : 10 + index,
                       transform: dragged && gesture?.mode === "reorder" ? `translateX(${Math.max(-28, Math.min(gesture.dx, 72))}px)` : undefined,
                     }}
-                    onPointerDown={mark.kind === "task" ? (e) => onCardDown(e, mark.id) : undefined}
-                    onMouseDown={mark.kind === "task" ? (e) => onCardDown(e, mark.id) : undefined}
+                    onPointerDown={adjusting && mark.kind === "task" ? (e) => onCardDown(e, mark.id) : undefined}
+                    onMouseDown={adjusting && mark.kind === "task" ? (e) => onCardDown(e, mark.id) : undefined}
                   >
                     {mark.kind === "task" ? (
                       <TaskOnRail
@@ -354,13 +341,15 @@ export function DayRail({
                         blockers={blockers}
                         readOnly={readOnly}
                         future={future}
-                        expanded={false}
+                        expanded={open}
+                        onToggle={adjusting ? undefined : () => toggle(mark.id)}
+                        onRemove={!readOnly && !adjusting && onRemove ? () => onRemove(mark.item) : undefined}
                         dragging={dragged}
                         onProgress={onProgress}
                         onEdit={onEdit}
                       />
                     ) : (
-                      <PinCard pin={mark.pin} />
+                      <PinCard pin={mark.pin} onCancel={!adjusting && onCancelPin ? () => onCancelPin(mark.id) : undefined} />
                     )}
                   </div>
                 </div>
@@ -369,59 +358,11 @@ export function DayRail({
             {gesture?.mode === "reorder" && (
               <div
                 className="absolute z-40 h-0.5 rounded bg-chip"
-                style={{ left: axis.pole - 6, width: 36, top: yOf(starts.get(gesture.id) ?? origin) }}
+                style={{ left: AXIS.pole - 6, width: 36, top: yOf(starts.get(gesture.id) ?? origin) }}
               />
             )}
           </div>
-        ) : (
-          <div ref={railRef} data-mode="view" className="relative">
-            <div className="absolute bottom-1 top-1 w-px bg-border" style={{ left: axis.pole }} />
-            <div className="space-y-2">
-              {viewRows.map((row) =>
-                row.type === "gap" ? (
-                  <div key={row.key} className="flex h-7 items-center" style={{ paddingLeft: axis.card }}>
-                    <span className="text-xs text-muted-foreground">空了 {formatMinutes(row.minutes)}</span>
-                  </div>
-                ) : (
-                  <div key={row.key} className="relative" style={{ paddingLeft: axis.card }}>
-                    <span
-                      data-hour={hourOnly(row.mark.start)}
-                      className="absolute top-3 text-right text-[11px] tabular-nums text-muted-foreground"
-                      style={{ left: 0, width: axis.label }}
-                    >
-                      {hourOnly(row.mark.start)}
-                    </span>
-                    <span className="absolute top-4 h-px bg-border" style={{ left: axis.pole, width: axis.card - axis.pole - 4 }} />
-                    <span
-                      className="absolute top-3 size-2 rounded-full border-2 bg-card"
-                      style={{
-                        left: axis.pole - 3.5,
-                        borderColor: row.mark.kind === "task" ? CATEGORY_COLOR[CATEGORY_OF[row.mark.item.kind]] : row.mark.pin.color,
-                      }}
-                    />
-                    {row.mark.kind === "task" ? (
-                      <TaskOnRail
-                        item={row.mark.item}
-                        start={row.mark.start}
-                        frac={frac}
-                        src={src}
-                        blockers={blockers}
-                        readOnly={readOnly}
-                        future={future}
-                        expanded={openId === row.mark.id}
-                        onToggle={() => toggle(row.mark.id)}
-                        onProgress={onProgress}
-                        onEdit={onEdit}
-                      />
-                    ) : (
-                      <PinCard pin={row.mark.pin} onCancel={onCancelPin ? () => onCancelPin(row.mark.id) : undefined} />
-                    )}
-                  </div>
-                ),
-              )}
-            </div>
-          </div>
-        ))}
+        )}
 
       {untimed.length > 0 && (
         <div className="space-y-2">
@@ -438,6 +379,7 @@ export function DayRail({
               future={future}
               expanded={!adjusting && openId === item.id}
               onToggle={adjusting ? undefined : () => toggle(item.id)}
+              onRemove={!readOnly && !adjusting && onRemove ? () => onRemove(item) : undefined}
               onProgress={onProgress}
               onEdit={onEdit}
             />
@@ -458,6 +400,7 @@ function TaskOnRail({
   future,
   expanded,
   onToggle,
+  onRemove,
   dragging,
   onProgress,
   onEdit,
@@ -473,6 +416,7 @@ function TaskOnRail({
   expanded: boolean;
   /** Absent while adjusting, so the card stays a drag handle. */
   onToggle?: () => void;
+  onRemove?: () => void;
   dragging?: boolean;
   onProgress: (i: PlanItem, pct: number) => void;
   onEdit: (i: PlanItem) => void;
@@ -491,6 +435,7 @@ function TaskOnRail({
         future={future}
         expanded={expanded}
         onToggle={onToggle}
+        onRemove={onRemove}
         dragging={dragging}
         onProgress={(p) => onProgress(item, p)}
         onEdit={() => onEdit(item)}
@@ -539,6 +484,7 @@ function TaskCard({
   future,
   expanded,
   onToggle,
+  onRemove,
   dragging,
   onProgress,
   onEdit,
@@ -554,6 +500,7 @@ function TaskCard({
   future: boolean;
   expanded: boolean;
   onToggle?: () => void;
+  onRemove?: () => void;
   dragging?: boolean;
   onProgress: (pct: number) => void;
   onEdit: () => void;
@@ -638,9 +585,24 @@ function TaskCard({
               </p>
             </button>
             {!readOnly && (
-              <Button variant="ghost" size="icon-xs" className="shrink-0 text-muted-foreground" onClick={onEdit} aria-label={`編輯 ${item.title}`}>
-                <Pencil />
-              </Button>
+              <span className="flex shrink-0">
+                {onRemove && (
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    className="text-muted-foreground hover:text-destructive"
+                    aria-label={`刪除 ${item.title}`}
+                    onClick={() => {
+                      if (confirm(`從今天拿掉「${item.title}」？重新排不會再把它加回來。`)) onRemove();
+                    }}
+                  >
+                    <Trash2 />
+                  </Button>
+                )}
+                <Button variant="ghost" size="icon-xs" className="shrink-0 text-muted-foreground" onClick={onEdit} aria-label={`編輯 ${item.title}`}>
+                  <Pencil />
+                </Button>
+              </span>
             )}
           </div>
           <div className="mt-1 flex items-center gap-2">

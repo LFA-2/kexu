@@ -598,6 +598,7 @@ export function TodayView({ me, isMine, color }: { me: string; isMine: boolean; 
             dayEnd={toMinutes(settings.dayEnd)}
             onProgress={setProgress}
             onEdit={setEditing}
+            onRemove={readOnly ? undefined : removeItem}
             onCommit={commitMoves}
             onCancelPin={readOnly ? undefined : cancelPin}
           />
@@ -712,7 +713,7 @@ function ItemDialog({
         <DialogFooter className="sm:justify-between">
           <Button variant="ghost" className="text-muted-foreground hover:text-destructive" onClick={onRemove}>
             <Trash2 className="size-3.5" />
-            今天不做
+            刪除
           </Button>
           <div className="flex flex-col-reverse gap-2 sm:flex-row">
             <Button variant="outline" onClick={onClose}>
