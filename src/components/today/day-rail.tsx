@@ -50,8 +50,11 @@ const CATEGORY_COLOR = {
 /** Pixels per minute while adjusting. 10 minutes is one snap, 20px. */
 const PX = 2;
 const PAD = 10;
-/** Hour digits only, so the cards can sit close to the scale. */
-const AXIS = { label: 22, pole: 30, card: 44 };
+/** View mode: hour only, pulled left so the cards get the width. */
+const VIEW_AXIS = { label: 22, pole: 30, card: 44 };
+/** Adjust mode: the full HH:mm scale needs the wider column. */
+const ADJUST_AXIS = { label: 40, pole: 52, card: 66 };
+const GAP_MIN = 40;
 const SIDEWAYS = 56;
 
 export type RailPin = {
@@ -269,41 +272,55 @@ export function DayRail({
   }
 
   const hours: number[] = [];
-  for (let m = Math.ceil(origin / 60) * 60; m <= end; m += 60) hours.push(m);
+  if (adjusting) {
+    for (let m = Math.ceil(origin / 60) * 60; m <= end; m += 60) hours.push(m);
+  }
 
+  const viewRows = (() => {
+    const rows: ({ type: "gap"; key: string; minutes: number } | { type: "mark"; key: string; mark: (typeof marks)[number] })[] = [];
+    let prevEnd: number | null = null;
+    for (const mark of marks) {
+      if (prevEnd !== null && mark.start - prevEnd >= GAP_MIN) {
+        rows.push({ type: "gap", key: `gap-${mark.id}`, minutes: mark.start - prevEnd });
+      }
+      rows.push({ type: "mark", key: mark.id, mark });
+      prevEnd = Math.max(prevEnd ?? 0, mark.start + mark.dur);
+    }
+    return rows;
+  })();
+
+  const axis = adjusting ? ADJUST_AXIS : VIEW_AXIS;
   function toggle(id: string) {
     setOpenId((cur) => (cur === id ? null : id));
   }
 
   return (
     <div className="space-y-3">
-      {marks.length > 0 && (
+      {marks.length > 0 &&
+        (adjusting ? (
           <div
             ref={railRef}
-            data-mode={adjusting ? "adjust" : "view"}
+            data-mode="adjust"
             data-origin={origin}
             data-px={PX}
-            className={`relative ${adjusting ? "select-none" : ""}`}
+            className="relative select-none"
             style={{ height: PAD * 2 + (end - origin) * PX }}
           >
-            <div className="absolute bottom-0 w-px bg-border" style={{ left: AXIS.pole, top: 0 }} />
+            <div className="absolute bottom-0 w-px bg-border" style={{ left: axis.pole, top: 0 }} />
             {hours.map((m) => (
-              <div key={m}>
-                <div
-                  data-hour={hourOnly(m)}
-                  className="absolute text-right text-[11px] tabular-nums text-muted-foreground"
-                  style={{ top: yOf(m) - 7, left: 0, width: AXIS.label }}
-                >
-                  {hourOnly(m)}
-                </div>
-                <div className="absolute h-px bg-border" style={{ left: AXIS.pole - 4, width: 8, top: yOf(m) }} />
+              <div
+                key={m}
+                data-hour={hhmm(m).slice(0, 5)}
+                className="absolute text-right text-[11px] tabular-nums text-muted-foreground"
+                style={{ top: yOf(m) - 7, left: 0, width: axis.label }}
+              >
+                {hhmm(m).slice(0, 5)}
               </div>
             ))}
             {marks.map((mark, index) => {
               const top = yOf(mark.start);
               const whisker = mark.dur * PX;
               const color = mark.kind === "task" ? CATEGORY_COLOR[CATEGORY_OF[mark.item.kind]] : mark.pin.color;
-              const open = mark.kind === "task" && !adjusting && openId === mark.id;
               const height = mark.kind === "task" ? 44 : mark.pin.point ? 32 : Math.max(52, Math.min(whisker - 4, 120));
               const dragged = gesture?.id === mark.id;
               return (
@@ -311,26 +328,25 @@ export function DayRail({
                   {whisker > 0 && (
                     <div
                       className="absolute w-1 rounded-full"
-                      style={{ left: AXIS.pole - 1.5, top, height: Math.max(whisker, 8), backgroundColor: color, opacity: mark.kind === "pin" ? 0.45 : 0.9 }}
+                      style={{ left: axis.pole - 1.5, top, height: Math.max(whisker, 8), backgroundColor: color, opacity: mark.kind === "pin" ? 0.45 : 0.9 }}
                     />
                   )}
                   <div
                     className="absolute h-px bg-border"
-                    style={{ left: AXIS.pole, width: AXIS.card - AXIS.pole - 4, top: top + 16 }}
+                    style={{ left: axis.pole, width: axis.card - axis.pole - 4, top: top + 16 }}
                   />
                   <div
-                    className={`absolute ${adjusting && mark.kind === "task" ? "touch-none" : ""} ${dragged || open ? "z-30" : ""}`}
+                    className={`absolute ${adjusting && mark.kind === "task" ? "touch-none" : ""} ${dragged ? "z-30" : ""}`}
                     style={{
                       top,
-                      height: open ? undefined : height,
-                      minHeight: height,
-                      left: AXIS.card,
+                      height,
+                      left: axis.card,
                       right: 4,
-                      zIndex: dragged || open ? 30 : 10 + index,
+                      zIndex: dragged ? 30 : 10 + index,
                       transform: dragged && gesture?.mode === "reorder" ? `translateX(${Math.max(-28, Math.min(gesture.dx, 72))}px)` : undefined,
                     }}
-                    onPointerDown={adjusting && mark.kind === "task" ? (e) => onCardDown(e, mark.id) : undefined}
-                    onMouseDown={adjusting && mark.kind === "task" ? (e) => onCardDown(e, mark.id) : undefined}
+                    onPointerDown={mark.kind === "task" ? (e) => onCardDown(e, mark.id) : undefined}
+                    onMouseDown={mark.kind === "task" ? (e) => onCardDown(e, mark.id) : undefined}
                   >
                     {mark.kind === "task" ? (
                       <TaskOnRail
@@ -341,15 +357,13 @@ export function DayRail({
                         blockers={blockers}
                         readOnly={readOnly}
                         future={future}
-                        expanded={open}
-                        onToggle={adjusting ? undefined : () => toggle(mark.id)}
-                        onRemove={!readOnly && !adjusting && onRemove ? () => onRemove(mark.item) : undefined}
+                        expanded={false}
                         dragging={dragged}
                         onProgress={onProgress}
                         onEdit={onEdit}
                       />
                     ) : (
-                      <PinCard pin={mark.pin} onCancel={!adjusting && onCancelPin ? () => onCancelPin(mark.id) : undefined} />
+                      <PinCard pin={mark.pin} />
                     )}
                   </div>
                 </div>
@@ -358,11 +372,66 @@ export function DayRail({
             {gesture?.mode === "reorder" && (
               <div
                 className="absolute z-40 h-0.5 rounded bg-chip"
-                style={{ left: AXIS.pole - 6, width: 36, top: yOf(starts.get(gesture.id) ?? origin) }}
+                style={{ left: axis.pole - 6, width: 36, top: yOf(starts.get(gesture.id) ?? origin) }}
               />
             )}
           </div>
-        )}
+        ) : (
+          <div ref={railRef} data-mode="view" className="relative">
+            <div className="absolute bottom-1 top-1 w-px bg-border" style={{ left: axis.pole }} />
+            <div className="space-y-2">
+              {viewRows.map((row) =>
+                row.type === "gap" ? (
+                  <div key={row.key} className="flex h-7 items-center" style={{ paddingLeft: axis.card }}>
+                    <span className="text-xs text-muted-foreground">空了 {formatMinutes(row.minutes)}</span>
+                  </div>
+                ) : (
+                  <div key={row.key} className="relative" style={{ paddingLeft: axis.card }}>
+                    <span
+                      data-hour={hourOnly(row.mark.start)}
+                      className="absolute top-3 text-right text-[11px] tabular-nums text-muted-foreground"
+                      style={{ left: 0, width: axis.label }}
+                    >
+                      {hourOnly(row.mark.start)}
+                    </span>
+                    <span className="absolute top-4 h-px bg-border" style={{ left: axis.pole, width: axis.card - axis.pole - 4 }} />
+                    <span
+                      className="absolute top-3 size-2 rounded-full border-2 bg-card"
+                      style={{
+                        left: axis.pole - 3.5,
+                        borderColor: row.mark.kind === "task" ? CATEGORY_COLOR[CATEGORY_OF[row.mark.item.kind]] : row.mark.pin.color,
+                      }}
+                    />
+                    {row.mark.kind === "task" ? (
+                      <TaskOnRail
+                        item={row.mark.item}
+                        start={row.mark.start}
+                        frac={frac}
+                        src={src}
+                        blockers={blockers}
+                        readOnly={readOnly}
+                        future={future}
+                        expanded={openId === row.mark.id}
+                        onToggle={() => toggle(row.mark.id)}
+                        onRemove={
+                          !readOnly && onRemove
+                            ? () => {
+                                if (row.mark.kind === "task") onRemove(row.mark.item);
+                              }
+                            : undefined
+                        }
+                        onProgress={onProgress}
+                        onEdit={onEdit}
+                      />
+                    ) : (
+                      <PinCard pin={row.mark.pin} onCancel={onCancelPin ? () => onCancelPin(row.mark.id) : undefined} />
+                    )}
+                  </div>
+                ),
+              )}
+            </div>
+          </div>
+        ))}
 
       {untimed.length > 0 && (
         <div className="space-y-2">
