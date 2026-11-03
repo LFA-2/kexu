@@ -1,7 +1,8 @@
 "use client";
 
-import { useLayoutEffect, useMemo, useState } from "react";
+import { useLayoutEffect, useMemo, useState, type ReactNode } from "react";
 import { AccountView } from "@/components/account-view";
+import { AddDoor, AddDoorButton } from "@/components/add-door";
 import { DataTools } from "@/components/data-tools";
 import { LifeView } from "@/components/life/life-view";
 import { LoginView } from "@/components/login-view";
@@ -152,13 +153,20 @@ function MainApp({ me }: { me: string }) {
     window.scrollTo({ top: 0 });
   }
 
+  const pagePad = isMine
+    ? "pb-[calc(8.25rem+env(safe-area-inset-bottom))] sm:pb-10"
+    : "pb-24 sm:pb-10";
+
   return (
+    <SchoolProvider ownerId={me} editable>
+      <LifeProvider ownerId={me} editable>
+        <AddDoor enabled={isMine}>
     <div className="relative min-h-full bg-background">
-      <div className="relative mx-auto flex min-h-full max-w-5xl flex-col px-4 pb-24 pt-6 sm:px-6 sm:pb-10 sm:pt-8">
-        <header className="animate-fade-up">
+      <div className={`relative mx-auto flex min-h-full max-w-5xl flex-col px-4 pt-6 sm:px-6 sm:pt-8 ${pagePad}`}>
+        <header className="animate-fade-up sm:sticky sm:top-0 sm:z-30 sm:-mx-6 sm:bg-background/95 sm:px-6 sm:pb-4 sm:backdrop-blur">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
-              <p className="font-display text-3xl tracking-tight text-ink sm:text-5xl">你並沒有那麼聰明</p>
+              <p className="font-display text-3xl tracking-tight text-ink sm:text-5xl">你也許有點聰明</p>
               <p className="mt-2 max-w-md text-sm leading-relaxed text-muted-foreground sm:text-base">
                 今天要做什麼、學校、生活、運動，收在同一個地方。
               </p>
@@ -192,6 +200,7 @@ function MainApp({ me }: { me: string }) {
             </div>
           </div>
           <InstallHint />
+          <AddDoorButton />
         </header>
 
         {showAccount ? (
@@ -259,25 +268,21 @@ function MainApp({ me }: { me: string }) {
                 <FitnessMain owner={ownerId} />
               </FitnessProvider>
             ) : (
-              // Keep one School+Life tree across 今日／學校／生活 so timetable edits
-              // stay in memory when switching tabs (needed for 今明行程 sync).
-              <SchoolProvider key={`s-${ownerId}`} ownerId={ownerId} editable={isMine}>
-                <LifeProvider key={`l-${ownerId}`} ownerId={ownerId} editable={isMine}>
-                  {activeCategory === "today" ? (
-                    <FitnessProvider key={`f-${ownerId}`} ownerId={ownerId} editable={isMine}>
-                      <TodayMain me={me} isMine={isMine} color={ownerColor} />
-                    </FitnessProvider>
-                  ) : activeCategory === "school" ? (
-                    <SchoolMain
-                      view={view}
-                      selectedCourseId={selectedCourseId}
-                      onSelectCourse={setSelectedCourseId}
-                    />
-                  ) : (
-                    <LifeMain color={ownerColor} />
-                  )}
-                </LifeProvider>
-              </SchoolProvider>
+              <OwnedData isMine={isMine} ownerId={ownerId}>
+                {activeCategory === "today" ? (
+                  <FitnessProvider key={`f-${ownerId}`} ownerId={ownerId} editable={isMine}>
+                    <TodayMain me={me} isMine={isMine} color={ownerColor} />
+                  </FitnessProvider>
+                ) : activeCategory === "school" ? (
+                  <SchoolMain
+                    view={view}
+                    selectedCourseId={selectedCourseId}
+                    onSelectCourse={setSelectedCourseId}
+                  />
+                ) : (
+                  <LifeMain color={ownerColor} />
+                )}
+              </OwnedData>
             )}
           </>
         )}
@@ -309,6 +314,29 @@ function MainApp({ me }: { me: string }) {
         </div>
       </nav>
     </div>
+        </AddDoor>
+      </LifeProvider>
+    </SchoolProvider>
+  );
+}
+
+/** Your own pages use the providers around the shell. Someone else's pages get their own read-only tree. */
+function OwnedData({
+  isMine,
+  ownerId,
+  children,
+}: {
+  isMine: boolean;
+  ownerId: string;
+  children: ReactNode;
+}) {
+  if (isMine) return children;
+  return (
+    <SchoolProvider key={`s-${ownerId}`} ownerId={ownerId} editable={false}>
+      <LifeProvider key={`l-${ownerId}`} ownerId={ownerId} editable={false}>
+        {children}
+      </LifeProvider>
+    </SchoolProvider>
   );
 }
 
