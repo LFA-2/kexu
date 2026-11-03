@@ -585,6 +585,7 @@ export function TodayView({ me, isMine, color }: { me: string; isMine: boolean; 
           </p>
         ) : (
           <DayRail
+            date={date}
             items={items}
             pins={pins}
             adjusting={adjusting && canAdjust}

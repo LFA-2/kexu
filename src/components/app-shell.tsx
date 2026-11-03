@@ -2,7 +2,7 @@
 
 import { useLayoutEffect, useMemo, useState, type ReactNode } from "react";
 import { AccountView } from "@/components/account-view";
-import { AddDoor, AddDoorButton } from "@/components/add-door";
+import { AddDoor } from "@/components/add-door";
 import { DataTools } from "@/components/data-tools";
 import { LifeView } from "@/components/life/life-view";
 import { LoginView } from "@/components/login-view";
@@ -154,7 +154,7 @@ function MainApp({ me }: { me: string }) {
   }
 
   const pagePad = isMine
-    ? "pb-[calc(8.25rem+env(safe-area-inset-bottom))] sm:pb-10"
+    ? "pb-[calc(8rem+env(safe-area-inset-bottom))] sm:pb-24"
     : "pb-24 sm:pb-10";
 
   return (
@@ -200,7 +200,6 @@ function MainApp({ me }: { me: string }) {
             </div>
           </div>
           <InstallHint />
-          <AddDoorButton />
         </header>
 
         {showAccount ? (

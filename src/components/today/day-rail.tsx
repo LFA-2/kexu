@@ -49,9 +49,10 @@ const CATEGORY_COLOR = {
 /** Pixels per minute while adjusting. 10 minutes is one snap, 20px. */
 const PX = 2;
 const PAD = 10;
-const LABEL_W = 40;
-const POLE_X = 52;
-const CARD_X = 66;
+/** View mode: hour only, pulled left so the cards get the width. */
+const VIEW_AXIS = { label: 22, pole: 30, card: 44 };
+/** Adjust mode: the full HH:mm scale needs the wider column. */
+const ADJUST_AXIS = { label: 40, pole: 52, card: 66 };
 const GAP_MIN = 40;
 const SIDEWAYS = 56;
 
@@ -69,6 +70,8 @@ const hhmm = (min: number) => {
   const m = Math.max(0, Math.round(min));
   return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
 };
+
+const hourOnly = (min: number) => String(Math.floor(Math.max(0, Math.round(min)) / 60));
 
 const axisOrigin = (earliest: number) => Math.max(0, Math.floor((earliest - 30) / 60) * 60);
 const axisEnd = (latest: number) => Math.ceil((latest + 20) / 60) * 60;
@@ -110,6 +113,7 @@ type Gesture = {
 };
 
 export function DayRail({
+  date,
   items,
   pins,
   adjusting,
@@ -125,6 +129,7 @@ export function DayRail({
   onCommit,
   onCancelPin,
 }: {
+  date: string;
   items: PlanItem[];
   pins: RailPin[];
   adjusting: boolean;
@@ -143,6 +148,13 @@ export function DayRail({
 }) {
   const railRef = useRef<HTMLDivElement>(null);
   const [gesture, setGesture] = useState<Gesture | null>(null);
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [openFor, setOpenFor] = useState(date);
+  if (openFor !== date) {
+    setOpenFor(date);
+    setOpenId(null);
+  }
+  if (adjusting && openId) setOpenId(null);
   const originRef = useRef<number | null>(null);
   const dragLock = useRef(false);
 
@@ -274,6 +286,11 @@ export function DayRail({
     return rows;
   })();
 
+  const axis = adjusting ? ADJUST_AXIS : VIEW_AXIS;
+  function toggle(id: string) {
+    setOpenId((cur) => (cur === id ? null : id));
+  }
+
   return (
     <div className="space-y-3">
       {marks.length > 0 &&
@@ -286,12 +303,13 @@ export function DayRail({
             className="relative select-none"
             style={{ height: PAD * 2 + (end - origin) * PX }}
           >
-            <div className="absolute bottom-0 w-px bg-border" style={{ left: POLE_X, top: 0 }} />
+            <div className="absolute bottom-0 w-px bg-border" style={{ left: axis.pole, top: 0 }} />
             {hours.map((m) => (
               <div
                 key={m}
-                className="absolute text-[11px] tabular-nums text-muted-foreground"
-                style={{ top: yOf(m) - 7, left: 0, width: LABEL_W }}
+                data-hour={hhmm(m).slice(0, 5)}
+                className="absolute text-right text-[11px] tabular-nums text-muted-foreground"
+                style={{ top: yOf(m) - 7, left: 0, width: axis.label }}
               >
                 {hhmm(m).slice(0, 5)}
               </div>
@@ -300,26 +318,26 @@ export function DayRail({
               const top = yOf(mark.start);
               const whisker = mark.dur * PX;
               const color = mark.kind === "task" ? CATEGORY_COLOR[CATEGORY_OF[mark.item.kind]] : mark.pin.color;
-              const height = mark.kind === "pin" && mark.pin.point ? 32 : Math.max(52, Math.min(whisker - 4, 120));
+              const height = mark.kind === "task" ? 44 : mark.pin.point ? 32 : Math.max(52, Math.min(whisker - 4, 120));
               const dragged = gesture?.id === mark.id;
               return (
                 <div key={mark.id}>
                   {whisker > 0 && (
                     <div
                       className="absolute w-1 rounded-full"
-                      style={{ left: POLE_X - 1.5, top, height: Math.max(whisker, 8), backgroundColor: color, opacity: mark.kind === "pin" ? 0.45 : 0.9 }}
+                      style={{ left: axis.pole - 1.5, top, height: Math.max(whisker, 8), backgroundColor: color, opacity: mark.kind === "pin" ? 0.45 : 0.9 }}
                     />
                   )}
                   <div
                     className="absolute h-px bg-border"
-                    style={{ left: POLE_X, width: CARD_X - POLE_X - 4, top: top + 16 }}
+                    style={{ left: axis.pole, width: axis.card - axis.pole - 4, top: top + 16 }}
                   />
                   <div
                     className={`absolute ${adjusting && mark.kind === "task" ? "touch-none" : ""} ${dragged ? "z-30" : ""}`}
                     style={{
                       top,
                       height,
-                      left: CARD_X,
+                      left: axis.card,
                       right: 4,
                       zIndex: dragged ? 30 : 10 + index,
                       transform: dragged && gesture?.mode === "reorder" ? `translateX(${Math.max(-28, Math.min(gesture.dx, 72))}px)` : undefined,
@@ -336,8 +354,7 @@ export function DayRail({
                         blockers={blockers}
                         readOnly={readOnly}
                         future={future}
-                        showSlider={height >= 96}
-                        showMeta={height >= 84}
+                        expanded={false}
                         dragging={dragged}
                         onProgress={onProgress}
                         onEdit={onEdit}
@@ -352,32 +369,33 @@ export function DayRail({
             {gesture?.mode === "reorder" && (
               <div
                 className="absolute z-40 h-0.5 rounded bg-chip"
-                style={{ left: POLE_X - 6, width: 36, top: yOf(starts.get(gesture.id) ?? origin) }}
+                style={{ left: axis.pole - 6, width: 36, top: yOf(starts.get(gesture.id) ?? origin) }}
               />
             )}
           </div>
         ) : (
           <div ref={railRef} data-mode="view" className="relative">
-            <div className="absolute bottom-1 top-1 w-px bg-border" style={{ left: POLE_X }} />
+            <div className="absolute bottom-1 top-1 w-px bg-border" style={{ left: axis.pole }} />
             <div className="space-y-2">
               {viewRows.map((row) =>
                 row.type === "gap" ? (
-                  <div key={row.key} className="flex h-7 items-center" style={{ paddingLeft: CARD_X }}>
+                  <div key={row.key} className="flex h-7 items-center" style={{ paddingLeft: axis.card }}>
                     <span className="text-xs text-muted-foreground">空了 {formatMinutes(row.minutes)}</span>
                   </div>
                 ) : (
-                  <div key={row.key} className="relative" style={{ paddingLeft: CARD_X }}>
+                  <div key={row.key} className="relative" style={{ paddingLeft: axis.card }}>
                     <span
-                      className="absolute top-3 text-[11px] tabular-nums text-muted-foreground"
-                      style={{ left: 0, width: LABEL_W }}
+                      data-hour={hourOnly(row.mark.start)}
+                      className="absolute top-3 text-right text-[11px] tabular-nums text-muted-foreground"
+                      style={{ left: 0, width: axis.label }}
                     >
-                      {hhmm(row.mark.start).slice(0, 5)}
+                      {hourOnly(row.mark.start)}
                     </span>
-                    <span className="absolute top-4 h-px bg-border" style={{ left: POLE_X, width: CARD_X - POLE_X - 4 }} />
+                    <span className="absolute top-4 h-px bg-border" style={{ left: axis.pole, width: axis.card - axis.pole - 4 }} />
                     <span
                       className="absolute top-3 size-2 rounded-full border-2 bg-card"
                       style={{
-                        left: POLE_X - 3.5,
+                        left: axis.pole - 3.5,
                         borderColor: row.mark.kind === "task" ? CATEGORY_COLOR[CATEGORY_OF[row.mark.item.kind]] : row.mark.pin.color,
                       }}
                     />
@@ -390,8 +408,8 @@ export function DayRail({
                         blockers={blockers}
                         readOnly={readOnly}
                         future={future}
-                        showSlider
-                        showMeta
+                        expanded={openId === row.mark.id}
+                        onToggle={() => toggle(row.mark.id)}
                         onProgress={onProgress}
                         onEdit={onEdit}
                       />
@@ -418,8 +436,8 @@ export function DayRail({
               blockers={blockers}
               readOnly={readOnly}
               future={future}
-              showSlider
-              showMeta
+              expanded={!adjusting && openId === item.id}
+              onToggle={adjusting ? undefined : () => toggle(item.id)}
               onProgress={onProgress}
               onEdit={onEdit}
             />
@@ -438,8 +456,8 @@ function TaskOnRail({
   blockers,
   readOnly,
   future,
-  showSlider,
-  showMeta,
+  expanded,
+  onToggle,
   dragging,
   onProgress,
   onEdit,
@@ -452,17 +470,18 @@ function TaskOnRail({
   blockers?: Map<string, string>;
   readOnly: boolean;
   future: boolean;
-  showSlider: boolean;
-  showMeta: boolean;
+  expanded: boolean;
+  /** Absent while adjusting, so the card stays a drag handle. */
+  onToggle?: () => void;
   dragging?: boolean;
   onProgress: (i: PlanItem, pct: number) => void;
   onEdit: (i: PlanItem) => void;
 }) {
   return (
-    <div className="h-full" data-task={item.title} data-start={start === null ? "" : hhmm(start)}>
+    <div className="h-full" data-task={item.title} data-start={start === null ? "" : hhmm(start)} data-open={expanded ? "true" : "false"}>
       <TaskCard
         item={item}
-        startLabel={start === null ? "—" : hhmm(start)}
+        startLabel={start === null ? "" : hhmm(start)}
         endLabel={start === null ? "" : hhmm(start + item.minutes)}
         fraction={frac(item)}
         overall={sourceProgress(item, src)}
@@ -470,8 +489,8 @@ function TaskOnRail({
         waitFor={item.kind === "unit" && item.refId ? blockers?.get(item.refId) : undefined}
         readOnly={readOnly}
         future={future}
-        showSlider={showSlider}
-        showMeta={showMeta}
+        expanded={expanded}
+        onToggle={onToggle}
         dragging={dragging}
         onProgress={(p) => onProgress(item, p)}
         onEdit={() => onEdit(item)}
@@ -518,8 +537,8 @@ function TaskCard({
   waitFor,
   readOnly,
   future,
-  showSlider,
-  showMeta,
+  expanded,
+  onToggle,
   dragging,
   onProgress,
   onEdit,
@@ -533,8 +552,8 @@ function TaskCard({
   waitFor?: string;
   readOnly: boolean;
   future: boolean;
-  showSlider: boolean;
-  showMeta: boolean;
+  expanded: boolean;
+  onToggle?: () => void;
   dragging?: boolean;
   onProgress: (pct: number) => void;
   onEdit: () => void;
@@ -549,6 +568,11 @@ function TaskCard({
   const shown = draft ?? value;
   const done = fraction >= 1;
   const locked = readOnly || future || !!waitFor || (item.kind === "workout" && workoutLogged);
+  const range = endLabel && endLabel !== startLabel ? `${startLabel}–${endLabel}` : startLabel;
+  const fill =
+    value > 0
+      ? `linear-gradient(to right, color-mix(in srgb, ${color} 32%, var(--card)) ${Math.min(100, value)}%, transparent ${Math.min(100, value)}%)`
+      : undefined;
 
   function change(v: number) {
     setDraft(v);
@@ -561,6 +585,32 @@ function TaskCard({
   useEffect(() => () => {
     if (timer.current) clearTimeout(timer.current);
   }, []);
+
+  if (!expanded) {
+    const className = `flex h-full w-full items-center gap-2 rounded-xl border bg-card px-2.5 text-left ${
+      dragging ? "border-chip shadow-md" : done ? "border-border/50" : "border-border/70"
+    } ${onToggle ? "py-2" : "py-1.5"}`;
+    const body = (
+      <>
+        <span className={`min-w-0 flex-1 truncate text-sm font-medium ${done ? "text-muted-foreground line-through" : "text-ink"}`}>
+          {item.title}
+        </span>
+        {range && <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{range}</span>}
+      </>
+    );
+    if (onToggle) {
+      return (
+        <button type="button" onClick={onToggle} className={className} style={{ backgroundImage: fill }} aria-expanded={false}>
+          {body}
+        </button>
+      );
+    }
+    return (
+      <div className={className} style={{ backgroundImage: fill }}>
+        {body}
+      </div>
+    );
+  }
 
   return (
     <div
@@ -577,25 +627,23 @@ function TaskCard({
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-1">
-            <div className="min-w-0">
+            <button type="button" onClick={onToggle} className="min-w-0 flex-1 text-left" aria-expanded>
               <p className={`truncate text-sm font-medium ${done ? "text-muted-foreground line-through" : "text-ink"}`}>
                 {item.title}
               </p>
               <p className="truncate text-[11px] text-muted-foreground">
-                {startLabel}
-                {endLabel && endLabel !== startLabel ? `–${endLabel}` : ""}
+                {range}
                 {item.detail ? `・${item.detail}` : ""}
                 {`・${formatMinutes(item.minutes)}`}
               </p>
-            </div>
+            </button>
             {!readOnly && (
               <Button variant="ghost" size="icon-xs" className="shrink-0 text-muted-foreground" onClick={onEdit} aria-label={`編輯 ${item.title}`}>
                 <Pencil />
               </Button>
             )}
           </div>
-          {showSlider && (
-            <div className="mt-1 flex items-center gap-2">
+          <div className="mt-1 flex items-center gap-2">
               <div className="relative min-w-0 flex-1">
                 <input
                   type="range"
@@ -618,18 +666,17 @@ function TaskCard({
               </div>
               <span className="w-9 shrink-0 text-right text-xs tabular-nums text-ink">{shown}%</span>
             </div>
-          )}
-          {showMeta && waitFor ? (
+          {waitFor ? (
             <p className="mt-0.5 flex items-center gap-1 text-[11px] text-muted-foreground">
               <Lock className="size-3" />
               完成「{waitFor}」後開始
             </p>
-          ) : showMeta && isWork ? (
+          ) : isWork ? (
             <p className="mt-0.5 text-[11px] text-muted-foreground">
               整體進度・{future ? "這天目標" : "今天目標"} {target}%{target === 100 ? "（做完）" : ""}
               {fraction >= 1 && " ✓"}
             </p>
-          ) : showMeta && item.kind === "workout" ? (
+          ) : item.kind === "workout" ? (
             <p className="mt-0.5 text-[11px] text-muted-foreground">
               {workoutLogged ? "已在「運動」記錄今天的訓練 ✓" : "到「運動」完成訓練會自動打勾"}
             </p>

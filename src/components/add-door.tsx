@@ -3,7 +3,6 @@
 import {
   createContext,
   useCallback,
-  useContext,
   useEffect,
   useState,
   type FormEvent,
@@ -84,11 +83,10 @@ export function AddDoor({ enabled, children }: { enabled: boolean; children: Rea
         <button
           type="button"
           onClick={openSheet}
-          className="fixed inset-x-4 z-40 flex h-12 items-center justify-center gap-2 rounded-2xl bg-primary text-base font-medium text-primary-foreground shadow-lg sm:hidden"
-          style={{ bottom: "calc(4.25rem + env(safe-area-inset-bottom))" }}
+          aria-label="新增待辦"
+          className="fixed right-4 bottom-[calc(4.25rem+env(safe-area-inset-bottom))] z-40 flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg sm:right-6 sm:bottom-6"
         >
-          <Plus className="size-5" />
-          新增待辦
+          <Plus className="size-7" />
         </button>
       )}
       {notice && (
@@ -101,22 +99,6 @@ export function AddDoor({ enabled, children }: { enabled: boolean; children: Rea
       )}
       {enabled && open && <AddSheet onClose={close} onSaved={saved} />}
     </AddDoorContext.Provider>
-  );
-}
-
-/** Desktop entry, in the sticky title row. Hidden on phones, where the bar sits above the nav. */
-export function AddDoorButton() {
-  const open = useContext(AddDoorContext);
-  if (!open) return null;
-  return (
-    <button
-      type="button"
-      onClick={open}
-      className="mt-4 hidden h-12 w-full max-w-sm items-center justify-center gap-2 rounded-2xl bg-primary text-base font-medium text-primary-foreground shadow-sm sm:inline-flex"
-    >
-      <Plus className="size-5" />
-      新增待辦
-    </button>
   );
 }
 
