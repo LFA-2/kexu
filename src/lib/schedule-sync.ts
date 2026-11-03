@@ -8,11 +8,14 @@ export function withTimetableClasses(
   date: string,
   items: ScheduleItem[] | undefined,
   school: SchoolState | undefined,
+  /** Timetable slot ids the user cancelled for this date only. */
+  skipped?: readonly string[],
 ): ScheduleItem[] {
   const list = items ?? [];
   if (!school) return sortSchedule(list);
   const wd = isoWeekday(parseISO(date));
-  const slots = (school.timetable ?? []).filter((t) => t.day === wd);
+  const skip = new Set(skipped ?? []);
+  const slots = (school.timetable ?? []).filter((t) => t.day === wd && !skip.has(t.id));
   const course = new Map(school.courses.map((c) => [c.id, c]));
   const manual = list.filter((i) => !i.fromTimetable);
   const prev = new Map(list.filter((i) => i.fromTimetable).map((i) => [i.fromTimetable!, i]));

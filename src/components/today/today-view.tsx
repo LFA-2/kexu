@@ -20,7 +20,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { TimeField, parseTime } from "@/components/time-field";
-import { toDateKey } from "@/lib/dates";
+import { isoWeekday, toDateKey } from "@/lib/dates";
 import {
   DEFAULT_PLAN_SETTINGS,
   sortSchedule,
@@ -287,6 +287,32 @@ export function TodayView({ me, isMine, color }: { me: string; isMine: boolean; 
       };
     });
   }, [school.timetable, school.courses, life.schedule, date]);
+
+  const held = useMemo(() => {
+    const weekday = isoWeekday(parseISO(date));
+    const slots = new Map((school.timetable ?? []).map((t) => [t.id, t]));
+    const courses = new Map(school.courses.map((c) => [c.id, c]));
+    const classes = (life.skippedClasses?.[date] ?? []).flatMap((id) => {
+      const slot = slots.get(id);
+      if (!slot || slot.day !== weekday) return [];
+      const course = slot.courseId ? courses.get(slot.courseId) : undefined;
+      const name = course?.name || slot.title || "上課";
+      return [{ key: `class:${id}`, kind: "上課" as const, label: name, time: `${slot.start}–${slot.end}`, restore: () => life.restoreClass(date, id) }];
+    });
+    const plans = (life.removedSchedule?.[date] ?? []).map((item) => ({
+      key: item.id,
+      kind: "行程" as const,
+      label: item.label,
+      time: item.kind === "span" && item.end ? `${item.start}–${item.end}` : item.start,
+      restore: () => life.restoreScheduleItem(date, item),
+    }));
+    return [...classes, ...plans];
+  }, [date, school.timetable, school.courses, life]);
+
+  function cancelPin(id: string) {
+    const item = (life.schedule?.[date] ?? []).find((s) => s.id === id);
+    if (item) life.cancelScheduleItem(date, item);
+  }
 
   function setProgress(item: PlanItem, pct: number) {
     const p = Math.max(0, Math.min(100, Math.round(pct)));
@@ -572,7 +598,30 @@ export function TodayView({ me, isMine, color }: { me: string; isMine: boolean; 
             onProgress={setProgress}
             onEdit={setEditing}
             onCommit={commitMoves}
+            onCancelPin={readOnly ? undefined : cancelPin}
           />
+        )}
+        {!readOnly && held.length > 0 && (
+          <div className="rounded-xl border border-dashed border-border/80 bg-card px-3 py-2.5">
+            <p className="text-xs text-muted-foreground">
+              今天不上
+              {held.some((h) => h.kind === "上課") && "・課程只拿掉這一天，下週會自己加回來"}
+            </p>
+            <ul className="mt-2 space-y-1.5">
+              {held.map((h) => (
+                <li key={h.key} className="flex items-center gap-2 text-sm">
+                  <span className="shrink-0 text-xs text-muted-foreground">{h.kind}</span>
+                  <span className="min-w-0 flex-1 truncate text-ink">
+                    {h.label}
+                    <span className="ml-1.5 tabular-nums text-muted-foreground">{h.time}</span>
+                  </span>
+                  <button type="button" className="shrink-0 text-xs text-ink" onClick={h.restore}>
+                    恢復
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
       </section>
 

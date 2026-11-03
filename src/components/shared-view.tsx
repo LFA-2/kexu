@@ -222,7 +222,12 @@ function DayPlans({
   data: Record<string, PersonData>;
 }) {
   const plans = people.map((p) =>
-    withTimetableClasses(date, data[p.userId]?.life?.schedule?.[date], data[p.userId]?.school),
+    withTimetableClasses(
+      date,
+      data[p.userId]?.life?.schedule?.[date],
+      data[p.userId]?.school,
+      data[p.userId]?.life?.skippedClasses?.[date],
+    ),
   );
   const range = timelineRange(plans);
 

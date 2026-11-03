@@ -24,6 +24,7 @@ const FALLBACK_COLOR = "#64748b";
 export function TimetableView() {
   const { timetable = [], courses, readOnly } = useSchool();
   const [editing, setEditing] = useState<TimetableSlot | "new" | null>(null);
+  const [override, setOverride] = useState<"list" | "table" | null>(null);
   const today = isoWeekday(new Date());
 
   const courseMap = useMemo(() => new Map(courses.map((c) => [c.id, c])), [courses]);
@@ -67,12 +68,44 @@ export function TimetableView() {
             </p>
           )}
         </div>
-        {!readOnly && (
-          <Button className="gap-1.5" onClick={() => setEditing("new")}>
-            <Plus data-icon="inline-start" />
-            新增上課時段
-          </Button>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          {timetable.length > 0 && (
+            <div className="flex rounded-xl border border-border/80 bg-card p-0.5 shadow-sm">
+              {(
+                [
+                  ["list", "清單"],
+                  ["table", "表格"],
+                ] as const
+              ).map(([id, label]) => {
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setOverride(id)}
+                    aria-pressed={override === null ? id === "list" : override === id}
+                    className={`rounded-lg px-3 py-1 text-sm font-medium ${
+                      override === id
+                        ? "bg-chip text-chip-foreground"
+                        : override === null && id === "list"
+                          ? "bg-chip text-chip-foreground sm:bg-transparent sm:text-muted-foreground"
+                          : override === null && id === "table"
+                            ? "text-muted-foreground sm:bg-chip sm:text-chip-foreground"
+                            : "text-muted-foreground hover:text-ink"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          {!readOnly && (
+            <Button className="gap-1.5" onClick={() => setEditing("new")}>
+              <Plus data-icon="inline-start" />
+              新增上課時段
+            </Button>
+          )}
+        </div>
       </header>
 
       {timetable.length === 0 ? (
@@ -87,7 +120,10 @@ export function TimetableView() {
       ) : (
         <>
           {/* Phone: the whole week as a list, one section per day */}
-          <div className="space-y-4 sm:hidden">
+          <div
+            data-timetable="list"
+            className={override === "table" ? "hidden" : override === "list" ? "space-y-4" : "space-y-4 sm:hidden"}
+          >
             {days.map((d) => {
               const slots = timetable
                 .filter((t) => t.day === d)
@@ -138,12 +174,21 @@ export function TimetableView() {
             })}
           </div>
 
-          <div className="hidden overflow-hidden rounded-2xl border border-border/70 bg-card sm:block">
+          <div
+            data-timetable="table"
+            className={
+              override === "list"
+                ? "hidden"
+                : override === "table"
+                  ? "overflow-x-auto rounded-2xl border border-border/70 bg-card"
+                  : "hidden overflow-x-auto rounded-2xl border border-border/70 bg-card sm:block"
+            }
+          >
             <div
               className="grid border-b border-border/70 text-center text-sm text-muted-foreground"
-              style={{ gridTemplateColumns: `3rem repeat(${days.length}, minmax(0, 1fr))` }}
+              style={{ gridTemplateColumns: `3rem repeat(${days.length}, minmax(4.75rem, 1fr))`, minWidth: `calc(3rem + ${days.length} * 4.75rem)` }}
             >
-              <span />
+              <span className="sticky left-0 z-10 bg-card" />
               {days.map((d) => (
                 <span
                   key={d}
@@ -155,9 +200,9 @@ export function TimetableView() {
             </div>
             <div
               className="relative grid"
-              style={{ gridTemplateColumns: `3rem repeat(${days.length}, minmax(0, 1fr))` }}
+              style={{ gridTemplateColumns: `3rem repeat(${days.length}, minmax(4.75rem, 1fr))`, minWidth: `calc(3rem + ${days.length} * 4.75rem)` }}
             >
-              <div>
+              <div className="sticky left-0 z-10 bg-card">
                 {hours.map((h) => (
                   <div
                     key={h}

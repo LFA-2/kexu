@@ -64,9 +64,10 @@ type Interval = [number, number];
 /** Busy intervals for the day: classes and timed plans from 今明行程. */
 export function busyIntervals(date: string, school: SchoolState, life: LifeState): Interval[] {
   const wd = isoWeekday(parseISO(date));
+  const skipped = new Set(life.skippedClasses?.[date] ?? []);
   const out: Interval[] = [];
   for (const t of school.timetable ?? []) {
-    if (t.day === wd) out.push([toMinutes(t.start), toMinutes(t.end)]);
+    if (t.day === wd && !skipped.has(t.id)) out.push([toMinutes(t.start), toMinutes(t.end)]);
   }
   for (const s of life.schedule?.[date] ?? []) {
     // Classes already come from the timetable; synced copies must not double-count.

@@ -59,6 +59,10 @@ export type LifeState = {
   available: string[];
   /** dateKey → main plans for that day (absent in data saved before this existed) */
   schedule?: Record<string, ScheduleItem[]>;
+  /** dateKey → timetable slot ids skipped that day. Other weeks are other dates, so the class returns. */
+  skippedClasses?: Record<string, string[]>;
+  /** dateKey → 今明行程 removed from 今日, kept so they can be put back. */
+  removedSchedule?: Record<string, ScheduleItem[]>;
   /** Weekly chores / habits */
   habits?: Habit[];
   /** dateKey → ids of habits done that day */

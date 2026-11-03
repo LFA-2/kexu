@@ -31,6 +31,10 @@ type LifeStore = LifeState & {
   toggleAvailable: (date: string) => void;
   addScheduleItem: (date: string, item: Omit<ScheduleItem, "id">) => void;
   removeScheduleItem: (date: string, id: string) => void;
+  /** Take a 今明行程 off this day. A class is skipped only for this date; anything else can be restored. */
+  cancelScheduleItem: (date: string, item: ScheduleItem) => void;
+  restoreScheduleItem: (date: string, item: ScheduleItem) => void;
+  restoreClass: (date: string, slotId: string) => void;
   /** Write this week's classes into the given days' 今明行程. */
   syncTimetableDays: (dates: string[], school: SchoolState) => void;
   addHabit: (input: Omit<Habit, "id" | "createdAt">) => void;
@@ -47,6 +51,10 @@ const PLAN_KEEP_DAYS = 120;
 const HABIT_LOG_KEEP_DAYS = 400;
 
 const SCHEDULE_KEEP_DAYS = 14;
+
+function keptDays<T>(map: Record<string, T> | undefined, cutoff: string) {
+  return Object.fromEntries(Object.entries(map ?? {}).filter(([d]) => d >= cutoff));
+}
 
 const LifeContext = createContext<LifeStore | null>(null);
 
@@ -165,6 +173,56 @@ export function LifeProvider({
     [mutate],
   );
 
+  const cancelScheduleItem = useCallback(
+    (date: string, item: ScheduleItem) =>
+      mutate((prev) => {
+        const cutoff = toDateKey(subDays(new Date(), SCHEDULE_KEEP_DAYS));
+        const schedule = keptDays(prev.schedule, cutoff);
+        const rest = (schedule[date] ?? []).filter((i) => i.id !== item.id);
+        if (rest.length) schedule[date] = rest;
+        else delete schedule[date];
+        if (item.fromTimetable) {
+          const skippedClasses = keptDays(prev.skippedClasses, cutoff);
+          const ids = new Set(skippedClasses[date] ?? []);
+          ids.add(item.fromTimetable);
+          skippedClasses[date] = [...ids];
+          return { ...prev, schedule, skippedClasses };
+        }
+        const removedSchedule = keptDays(prev.removedSchedule, cutoff);
+        const kept = (removedSchedule[date] ?? []).filter((i) => i.id !== item.id);
+        removedSchedule[date] = [...kept, item].slice(-20);
+        return { ...prev, schedule, removedSchedule };
+      }),
+    [mutate],
+  );
+
+  const restoreScheduleItem = useCallback(
+    (date: string, item: ScheduleItem) =>
+      mutate((prev) => {
+        const removedSchedule = { ...(prev.removedSchedule ?? {}) };
+        const rest = (removedSchedule[date] ?? []).filter((i) => i.id !== item.id);
+        if (rest.length) removedSchedule[date] = rest;
+        else delete removedSchedule[date];
+        const schedule = { ...(prev.schedule ?? {}) };
+        const day = schedule[date] ?? [];
+        if (!day.some((i) => i.id === item.id)) schedule[date] = [...day, item];
+        return { ...prev, schedule, removedSchedule };
+      }),
+    [mutate],
+  );
+
+  const restoreClass = useCallback(
+    (date: string, slotId: string) =>
+      mutate((prev) => {
+        const skippedClasses = { ...(prev.skippedClasses ?? {}) };
+        const rest = (skippedClasses[date] ?? []).filter((id) => id !== slotId);
+        if (rest.length) skippedClasses[date] = rest;
+        else delete skippedClasses[date];
+        return { ...prev, skippedClasses };
+      }),
+    [mutate],
+  );
+
   const syncTimetableDays = useCallback(
     (dates: string[], school: SchoolState) => {
       let changed = false;
@@ -173,7 +231,7 @@ export function LifeProvider({
         Object.entries(state.schedule ?? {}).filter(([d]) => d >= cutoff),
       );
       for (const date of dates) {
-        const next = withTimetableClasses(date, schedule[date], school);
+        const next = withTimetableClasses(date, schedule[date], school, state.skippedClasses?.[date]);
         if (!scheduleNeedsSync(schedule[date], next)) continue;
         changed = true;
         if (next.length) schedule[date] = next;
@@ -183,14 +241,14 @@ export function LifeProvider({
       mutate((prev) => {
         const merged = { ...(prev.schedule ?? {}) };
         for (const date of dates) {
-          const next = withTimetableClasses(date, merged[date], school);
+          const next = withTimetableClasses(date, merged[date], school, prev.skippedClasses?.[date]);
           if (next.length) merged[date] = next;
           else delete merged[date];
         }
         return { ...prev, schedule: merged };
       });
     },
-    [mutate, state.schedule],
+    [mutate, state.schedule, state.skippedClasses],
   );
 
   const addHabit = useCallback(
@@ -284,6 +342,9 @@ export function LifeProvider({
     toggleAvailable,
     addScheduleItem,
     removeScheduleItem,
+    cancelScheduleItem,
+    restoreScheduleItem,
+    restoreClass,
     syncTimetableDays,
     addHabit,
     updateHabit,

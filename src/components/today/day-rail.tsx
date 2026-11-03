@@ -123,6 +123,7 @@ export function DayRail({
   onProgress,
   onEdit,
   onCommit,
+  onCancelPin,
 }: {
   items: PlanItem[];
   pins: RailPin[];
@@ -137,6 +138,8 @@ export function DayRail({
   onProgress: (i: PlanItem, pct: number) => void;
   onEdit: (i: PlanItem) => void;
   onCommit: (updates: { id: string; start: string }[]) => void;
+  /** View mode only. Removes a 今明行程 sign from this day. */
+  onCancelPin?: (id: string) => void;
 }) {
   const railRef = useRef<HTMLDivElement>(null);
   const [gesture, setGesture] = useState<Gesture | null>(null);
@@ -393,7 +396,7 @@ export function DayRail({
                         onEdit={onEdit}
                       />
                     ) : (
-                      <PinCard pin={row.mark.pin} />
+                      <PinCard pin={row.mark.pin} onCancel={onCancelPin ? () => onCancelPin(row.mark.id) : undefined} />
                     )}
                   </div>
                 ),
@@ -477,7 +480,7 @@ function TaskOnRail({
   );
 }
 
-function PinCard({ pin }: { pin: RailPin }) {
+function PinCard({ pin, onCancel }: { pin: RailPin; onCancel?: () => void }) {
   return (
     <div
       data-pin={pin.title}
@@ -491,6 +494,16 @@ function PinCard({ pin }: { pin: RailPin }) {
       <span className="shrink-0 text-xs tabular-nums">
         {pin.point || !pin.end ? pin.start : `${pin.start}–${pin.end}`}
       </span>
+      {onCancel && (
+        <button
+          type="button"
+          className="shrink-0 text-xs text-muted-foreground hover:text-ink"
+          aria-label={`取消 ${pin.title}`}
+          onClick={onCancel}
+        >
+          取消
+        </button>
+      )}
     </div>
   );
 }
