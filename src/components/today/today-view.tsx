@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { addDays, format, parseISO, startOfWeek } from "date-fns";
 import { DayTimeline, timelineRange } from "@/components/day-timeline";
+import { DayRail, type RailPin } from "@/components/today/day-rail";
 import { WeekView } from "@/components/today/week-view";
 import { zhTW } from "date-fns/locale";
 import { BarChart, ProgressRing, SegmentBar, SERIES } from "@/components/charts";
@@ -39,7 +40,6 @@ import {
   planCompletion,
   planShortfalls,
   sortItems,
-  sourceProgress,
   unitBlockers,
   workItem,
   type LiveSources,
@@ -53,39 +53,14 @@ import { useLinks } from "@/store/links-store";
 import { usePeopleData } from "@/store/people-data";
 import { useSchool } from "@/store/school-store";
 import {
-  BookOpen,
-  CalendarClock,
+  CalendarHeart,
   ChevronLeft,
   ChevronRight,
-  ClipboardList,
-  Dumbbell,
-  GraduationCap,
-  GripVertical,
-  ListTodo,
-  NotebookPen,
-  Pencil,
   Plus,
-  CalendarHeart,
-  Lock,
   RefreshCw,
-  RotateCcw,
   Settings2,
-  Sparkles,
   Trash2,
-  type LucideIcon,
 } from "lucide-react";
-
-const KIND_ICON: Record<PlanItem["kind"], LucideIcon> = {
-  homework: ClipboardList,
-  unit: BookOpen,
-  exam: GraduationCap,
-  review: RotateCcw,
-  habit: Sparkles,
-  todo: ListTodo,
-  workout: Dumbbell,
-  action: NotebookPen,
-  custom: CalendarClock,
-};
 
 const CATEGORY_COLOR = {
   school: SERIES[0],
@@ -123,6 +98,7 @@ export function TodayView({ me, isMine, color }: { me: string; isMine: boolean; 
   const [adding, setAdding] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [mode, setMode] = useState<"day" | "week">("day");
+  const [adjustingDate, setAdjustingDate] = useState<string | null>(null);
 
   const refreshMeetings = useCallback(async () => {
     if (!isMine) return;
@@ -294,18 +270,18 @@ export function TodayView({ me, isMine, color }: { me: string; isMine: boolean; 
   }, [readOnly, loaded, school.loaded, school.timetable, school.courses, todayKey, date, life.syncTimetableDays]);
 
   // 今明行程 (including classes synced from the timetable). Not counted in the %.
-  const classes = useMemo((): ClassRow[] => {
+  const pins = useMemo((): RailPin[] => {
     const slots = new Map((school.timetable ?? []).map((t) => [t.id, t]));
     const courses = new Map(school.courses.map((c) => [c.id, c]));
     return sortSchedule(life.schedule?.[date] ?? []).map((s) => {
       const slot = s.fromTimetable ? slots.get(s.fromTimetable) : undefined;
       const course = slot?.courseId ? courses.get(slot.courseId) : undefined;
       return {
+        id: s.id,
         prefix: s.fromTimetable ? "上課" : "行程",
         start: s.start,
         end: s.kind === "span" ? s.end : undefined,
         title: s.label,
-        location: "",
         color: course?.color ?? "#475569",
         point: s.kind === "point",
       };
@@ -380,8 +356,17 @@ export function TodayView({ me, isMine, color }: { me: string; isMine: boolean; 
     });
   }
 
-  function moveItem(item: PlanItem, start: string) {
-    saveItem({ ...item, start, manual: true });
+  function commitMoves(updates: { id: string; start: string }[]) {
+    if (updates.length === 0) return;
+    const map = new Map(updates.map((u) => [u.id, u.start]));
+    life.updatePlan(date, (prev) => {
+      const base = prev ?? plan;
+      if (!base) return prev;
+      return {
+        ...base,
+        items: base.items.map((i) => (map.has(i.id) ? { ...i, start: map.get(i.id) ?? i.start, manual: true } : i)),
+      };
+    });
   }
 
   if (!loaded) return <p className="py-16 text-center text-sm text-muted-foreground">載入中…</p>;
@@ -389,6 +374,9 @@ export function TodayView({ me, isMine, color }: { me: string; isMine: boolean; 
   const daySchedule = sortSchedule(life.schedule?.[date] ?? []);
   const dateLabel = format(parseISO(date), "M 月 d 日 EEEE", { locale: zhTW });
   const isPast = date < todayKey;
+  const settings = life.planSettings ?? DEFAULT_PLAN_SETTINGS;
+  const adjusting = adjustingDate === date;
+  const canAdjust = !readOnly && !isFuture && items.some((i) => i.start);
 
   const modeToggle = (
     <div className="flex rounded-xl border border-border/80 bg-card p-0.5 shadow-sm">
@@ -527,17 +515,29 @@ export function TodayView({ me, isMine, color }: { me: string; isMine: boolean; 
       </section>
 
       <section className="space-y-2">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-2">
           <h3 className="font-display text-lg text-ink">要做的事</h3>
-          {!readOnly && (
-            <Button size="sm" className="gap-1" onClick={() => setAdding(true)}>
-              <Plus className="size-3.5" />
-              新增
-            </Button>
-          )}
+          <div className="flex items-center gap-2">
+            {canAdjust && (
+              <Button
+                size="sm"
+                variant={adjusting ? "default" : "outline"}
+                aria-pressed={adjusting}
+                onClick={() => setAdjustingDate(adjusting ? null : date)}
+              >
+                {adjusting ? "完成" : "調整"}
+              </Button>
+            )}
+            {!readOnly && (
+              <Button size="sm" className="gap-1" onClick={() => setAdding(true)}>
+                <Plus className="size-3.5" />
+                新增
+              </Button>
+            )}
+          </div>
         </div>
-        {!readOnly && !isFuture && items.length > 0 && (
-          <p className="text-xs text-muted-foreground">按住左側⋮⋮上下拖，可以改時間和順序。</p>
+        {adjusting && canAdjust && (
+          <p className="text-xs text-muted-foreground">上下拖改時間，往旁邊拉可改順序。今明行程不會動。</p>
         )}
         {!readOnly && date === todayKey && shortfalls.length > 0 && (
           <div className="rounded-xl bg-amber-50 px-3 py-2.5 text-sm text-amber-900 ring-1 ring-amber-300/80">
@@ -553,22 +553,25 @@ export function TodayView({ me, isMine, color }: { me: string; isMine: boolean; 
           <p className="rounded-2xl border border-dashed border-border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
             {readOnly || isPast ? "這天沒有計畫" : "正在排…"}
           </p>
-        ) : items.length === 0 && classes.length === 0 ? (
+        ) : items.length === 0 && pins.length === 0 ? (
           <p className="rounded-2xl border border-dashed border-border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
             這天沒有需要做的事 🎉 可以按「新增」加入自己的安排
           </p>
         ) : (
-          <Timeline
+          <DayRail
             items={items}
-            classes={classes}
+            pins={pins}
+            adjusting={adjusting && canAdjust}
             readOnly={readOnly}
             future={isFuture}
             frac={frac}
             src={src}
             blockers={isFuture ? undefined : blockers}
+            dayStart={toMinutes(settings.dayStart)}
+            dayEnd={toMinutes(settings.dayEnd)}
             onProgress={setProgress}
             onEdit={setEditing}
-            onMove={moveItem}
+            onCommit={commitMoves}
           />
         )}
       </section>
@@ -612,343 +615,6 @@ export function TodayView({ me, isMine, color }: { me: string; isMine: boolean; 
   );
 }
 
-type ClassRow = {
-  prefix: string;
-  start: string;
-  end?: string;
-  title: string;
-  location: string;
-  color: string;
-  /** a moment (起床、出門…) rather than a time span */
-  point?: boolean;
-};
-
-type TimelineRow =
-  | { type: "item"; id: string; start: string; item: PlanItem }
-  | { type: "class"; id: string; start: string; cls: ClassRow };
-
-const hhmmOf = (min: number) => {
-  const m = ((min % (24 * 60)) + 24 * 60) % (24 * 60);
-  return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
-};
-const snap5 = (min: number) => Math.round(min / 5) * 5;
-const endsAt = (row: TimelineRow) =>
-  row.type === "class"
-    ? toMinutes(row.cls.end || row.cls.start)
-    : toMinutes(row.item.start || "08:00") + row.item.minutes;
-
-function Timeline({
-  items,
-  classes,
-  readOnly,
-  future,
-  frac,
-  src,
-  blockers,
-  onProgress,
-  onEdit,
-  onMove,
-}: {
-  items: PlanItem[];
-  classes: ClassRow[];
-  readOnly: boolean;
-  future: boolean;
-  frac: (i: PlanItem) => number;
-  src: LiveSources;
-  /** locked unit id → title of the unit to finish first */
-  blockers?: Map<string, string>;
-  onProgress: (i: PlanItem, pct: number) => void;
-  onEdit: (i: PlanItem) => void;
-  onMove: (item: PlanItem, start: string) => void;
-}) {
-  const baseRows = useMemo<TimelineRow[]>(
-    () =>
-      [
-        ...items.map((i) => ({ type: "item" as const, id: i.id, start: i.start || "99:99", item: i })),
-        ...classes.map((c, k) => ({
-          type: "class" as const,
-          id: `c:${c.prefix}:${c.start}:${c.title}:${k}`,
-          start: c.start,
-          cls: c,
-        })),
-      ].sort((a, b) => a.start.localeCompare(b.start) || (a.type === "class" ? -1 : 1)),
-    [items, classes],
-  );
-  const canDrag = !readOnly && !future;
-  const listRef = useRef<HTMLUListElement>(null);
-  const [dragId, setDragId] = useState<string | null>(null);
-  const [order, setOrder] = useState<string[] | null>(null);
-  const rows = order
-    ? order.flatMap((id) => {
-        const row = baseRows.find((r) => r.id === id);
-        return row ? [row] : [];
-      })
-    : baseRows;
-
-  const dragRef = useRef({
-    id: null as string | null,
-    order: null as string[] | null,
-    base: baseRows,
-    onMove,
-  });
-  useEffect(() => {
-    dragRef.current.base = baseRows;
-    dragRef.current.onMove = onMove;
-  }, [baseRows, onMove]);
-
-  function pointerDown(id: string) {
-    if (!canDrag) return;
-    const row = baseRows.find((r) => r.id === id);
-    if (!row || row.type !== "item") return;
-    const initial = baseRows.map((r) => r.id);
-    dragRef.current.id = id;
-    dragRef.current.order = initial;
-    setDragId(id);
-    setOrder(initial);
-
-    function move(ev: { clientY: number }) {
-      const cur = dragRef.current.order;
-      const list = listRef.current;
-      const drag = dragRef.current.id;
-      if (!drag || !cur || !list) return;
-      const kids = [...list.children] as HTMLElement[];
-      let insert = kids.length;
-      for (let i = 0; i < kids.length; i++) {
-        const box = kids[i].getBoundingClientRect();
-        if (ev.clientY < box.top + box.height / 2) {
-          insert = i;
-          break;
-        }
-      }
-      const rest = cur.filter((x) => x !== drag);
-      const from = cur.indexOf(drag);
-      const at = insert > from ? insert - 1 : insert;
-      const next = [...rest.slice(0, at), drag, ...rest.slice(at)];
-      if (next.some((x, i) => x !== cur[i])) {
-        dragRef.current.order = next;
-        setOrder(next);
-      }
-    }
-    function up() {
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", up);
-      window.removeEventListener("pointercancel", up);
-      window.removeEventListener("mousemove", move);
-      window.removeEventListener("mouseup", up);
-      const drag = dragRef.current.id;
-      const cur = dragRef.current.order;
-      const base = dragRef.current.base;
-      dragRef.current.id = null;
-      dragRef.current.order = null;
-      setDragId(null);
-      setOrder(null);
-      if (!drag || !cur) return;
-      const ordered = cur.flatMap((x) => {
-        const r = base.find((row) => row.id === x);
-        return r ? [r] : [];
-      });
-      const idx = ordered.findIndex((r) => r.id === drag);
-      const dropped = ordered[idx];
-      if (!dropped || dropped.type !== "item" || idx < 0) return;
-      const startMin =
-        idx === 0 ? toMinutes(dropped.item.start || "08:00") : snap5(endsAt(ordered[idx - 1]));
-      const start = hhmmOf(Math.max(0, startMin));
-      if (start !== dropped.item.start) dragRef.current.onMove(dropped.item, start);
-    }
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", up);
-    window.addEventListener("pointercancel", up);
-    window.addEventListener("mousemove", move);
-    window.addEventListener("mouseup", up);
-  }
-
-  return (
-    <ul ref={listRef} className="space-y-2">
-      {rows.map((r) =>
-        r.type === "class" ? (
-          <li
-            key={r.id}
-            className="flex items-center gap-3 rounded-xl border border-dashed border-border/80 bg-soft/70 px-3 py-2 text-sm"
-          >
-            {canDrag && <span className="w-5 shrink-0" aria-hidden />}
-            <span className="w-11 shrink-0 tabular-nums text-muted-foreground">{r.cls.start}</span>
-            {r.cls.point ? (
-              <span className="mx-[-2px] size-2 rounded-full border-2 bg-card" style={{ borderColor: r.cls.color }} />
-            ) : (
-              <span className="h-6 w-1 rounded-full" style={{ backgroundColor: r.cls.color }} />
-            )}
-            <span className="min-w-0 flex-1 truncate text-muted-foreground">
-              {r.cls.prefix}・{r.cls.title}
-              {r.cls.location ? `（${r.cls.location}）` : ""}
-            </span>
-            {r.cls.end && <span className="text-xs tabular-nums text-muted-foreground">~{r.cls.end}</span>}
-          </li>
-        ) : (
-          <ItemRow
-            key={r.id}
-            item={r.item}
-            readOnly={readOnly}
-            future={future}
-            dragging={dragId === r.id}
-            canDrag={canDrag}
-            fraction={frac(r.item)}
-            overall={sourceProgress(r.item, src)}
-            workoutLogged={r.item.kind === "workout" && !!src.fitness?.sessions.some((s) => s.date === src.date)}
-            waitFor={r.item.kind === "unit" && r.item.refId ? blockers?.get(r.item.refId) : undefined}
-            onProgress={(p) => onProgress(r.item, p)}
-            onEdit={() => onEdit(r.item)}
-            onDragHandleDown={() => pointerDown(r.id)}
-          />
-        ),
-      )}
-    </ul>
-  );
-}
-
-function ItemRow({
-  item,
-  readOnly,
-  future,
-  fraction,
-  overall,
-  workoutLogged,
-  waitFor,
-  canDrag,
-  dragging,
-  onProgress,
-  onEdit,
-  onDragHandleDown,
-}: {
-  item: PlanItem;
-  readOnly: boolean;
-  future: boolean;
-  fraction: number;
-  /** overall % of the source for school work, else null */
-  overall: number | null;
-  workoutLogged: boolean;
-  /** title of the unit that has to be finished before this one can start */
-  waitFor?: string;
-  canDrag?: boolean;
-  dragging?: boolean;
-  onProgress: (pct: number) => void;
-  onEdit: () => void;
-  onDragHandleDown?: () => void;
-}) {
-  const Icon = KIND_ICON[item.kind];
-  const color = CATEGORY_COLOR[CATEGORY_OF[item.kind]];
-  const isWork = overall !== null;
-  const value = isWork ? overall : Math.round(fraction * 100);
-  const target = isWork ? Math.min(100, Math.round((item.base ?? 0) + (item.share ?? 0))) : null;
-  const [draft, setDraft] = useState<number | null>(null);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const shown = draft ?? value;
-  const done = fraction >= 1;
-  const locked = readOnly || future || !!waitFor || (item.kind === "workout" && workoutLogged);
-
-  function change(v: number) {
-    setDraft(v);
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => {
-      onProgress(v);
-      setDraft(null);
-    }, 350);
-  }
-  useEffect(() => () => {
-    if (timer.current) clearTimeout(timer.current);
-  }, []);
-
-  const end = item.start ? toMinutes(item.start) + item.minutes : null;
-
-  return (
-    <li
-      className={`rounded-xl border bg-card px-3 py-3 transition-colors ${
-        dragging ? "border-chip shadow-md" : done ? "border-border/50 bg-soft/60" : "border-border/70"
-      }`}
-    >
-      <div className="flex items-start gap-3">
-        {canDrag && (
-          <button
-            type="button"
-            className="mt-0.5 touch-none text-muted-foreground hover:text-ink"
-            aria-label={`拖移 ${item.title}`}
-            onPointerDown={onDragHandleDown}
-            onMouseDown={onDragHandleDown}
-          >
-            <GripVertical className="size-4" />
-          </button>
-        )}
-        <span className="w-11 shrink-0 pt-0.5 text-sm tabular-nums text-muted-foreground">
-          {item.start || "—"}
-        </span>
-        <span
-          className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg text-white"
-          style={{ backgroundColor: color }}
-        >
-          <Icon className="size-4" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              <p className={`text-sm font-medium ${done ? "text-muted-foreground line-through" : "text-ink"}`}>
-                {item.title}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {item.detail && `${item.detail}・`}
-                {formatMinutes(item.minutes)}
-                {end !== null && `・到 ${String(Math.floor(end / 60) % 24).padStart(2, "0")}:${String(end % 60).padStart(2, "0")}`}
-              </p>
-            </div>
-            {!readOnly && (
-              <Button variant="ghost" size="icon-xs" className="shrink-0 text-muted-foreground" onClick={onEdit} aria-label="調整">
-                <Pencil />
-              </Button>
-            )}
-          </div>
-
-          <div className="mt-2 flex items-center gap-3">
-            <div className="relative flex-1">
-              <input
-                type="range"
-                min={0}
-                max={100}
-                step={5}
-                value={shown}
-                disabled={locked}
-                onChange={(e) => change(Number(e.target.value))}
-                className="progress-range w-full"
-                style={{ "--fill": `${shown}%`, "--accent": color } as React.CSSProperties}
-                aria-label={`${item.title} 進度`}
-              />
-              {target !== null && target < 100 && (
-                <span
-                  className="pointer-events-none absolute top-1/2 h-4 w-0.5 -translate-y-1/2 rounded bg-chip"
-                  style={{ left: `calc(${target}% - 1px)` }}
-                  title={`今天目標 ${target}%`}
-                />
-              )}
-            </div>
-            <span className="w-11 shrink-0 text-right text-sm tabular-nums text-ink">{shown}%</span>
-          </div>
-          {waitFor ? (
-            <p className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground">
-              <Lock className="size-3" />
-              完成「{waitFor}」後開始
-            </p>
-          ) : isWork ? (
-            <p className="mt-1 text-[11px] text-muted-foreground">
-              整體進度・{future ? "這天目標" : "今天目標"} {target}%{target === 100 ? "（做完）" : ""}
-              {fraction >= 1 && " ✓"}
-            </p>
-          ) : item.kind === "workout" ? (
-            <p className="mt-1 text-[11px] text-muted-foreground">
-              {workoutLogged ? "已在「運動」記錄今天的訓練 ✓" : "到「運動」完成訓練會自動打勾"}
-            </p>
-          ) : null}
-        </div>
-      </div>
-    </li>
-  );
-}
 
 function ItemDialog({
   item,
