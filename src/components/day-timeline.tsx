@@ -28,7 +28,7 @@ function textWidth(text: string) {
 }
 
 /** Greedy lane assignment so labels never overlap. */
-function layoutLabels(labels: { center: number; text: string }[], width: number) {
+export function layoutLabels(labels: { center: number; text: string }[], width: number) {
   const laneEnds: number[] = [];
   return [...labels]
     .sort((a, b) => a.center - b.center)

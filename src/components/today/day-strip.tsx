@@ -1,19 +1,25 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { layoutLabels } from "@/components/day-timeline";
 import { toMinutes, type PlanItem } from "@/lib/life";
 import { CATEGORY_OF } from "@/lib/planner";
 import { hhmm } from "@/lib/reflow";
 import { formatMinutes } from "@/lib/types";
 import type { RailPin } from "@/components/today/day-rail";
 
+const LABEL_PX = 11;
+const SPAN_LANE = 17;
+const POINT_LANE = 16;
+
 /**
- * The whole day squeezed into one bar: classes and 行程 hatched, tasks in their
- * category colour, a line for now, and anything past the day's end in amber.
+ * The 今明行程 number line, with the day's tasks on it: 行程 and classes in the
+ * user's colour with labels, tasks as thin bars in their category colour.
  */
 export function DayStrip({
   items,
   pins,
+  color,
   colors,
   frac,
   dayStart,
@@ -23,6 +29,8 @@ export function DayStrip({
 }: {
   items: PlanItem[];
   pins: RailPin[];
+  /** the user's colour, for 行程 and classes */
+  color: string;
   colors: Record<string, string>;
   frac: (i: PlanItem) => number;
   dayStart: number;
@@ -59,97 +67,126 @@ export function DayStrip({
   const hi = Math.ceil(Math.max(dayEnd, ...spans.map((s) => s.b), ...tasks.map((t) => t.b)) / 60);
   const total = Math.max(60, (hi - lo) * 60);
   const x = (m: number) => ((m - lo * 60) / total) * width;
-  const step = width / (hi - lo) >= 40 ? 2 : width / (hi - lo) >= 22 ? 3 : 4;
-  const ticks: number[] = [];
-  for (let h = lo; h <= hi; h++) if ((h - lo) % step === 0) ticks.push(h);
 
-  const H = 30;
+  const spanLabels = layoutLabels(
+    spans.map((s) => ({ center: (x(s.a) + x(s.b)) / 2, text: s.pin.title })),
+    width,
+  );
+  const pointLabels = layoutLabels(
+    points.map((p) => ({ center: x(p.a), text: `${p.pin.title} ${p.pin.start}` })),
+    width,
+  );
+  const spanLanes = spanLabels.reduce((n, l) => Math.max(n, l.lane + 1), 0);
+  const pointLanes = pointLabels.reduce((n, l) => Math.max(n, l.lane + 1), 0);
+
+  const step = width / (hi - lo) >= 34 ? 2 : 3;
+  const ticks: number[] = [];
+  for (let h = lo; h <= hi; h++) if ((h - lo) % step === 0 || h === hi) ticks.push(h);
+  if (ticks.length > 1 && hi - ticks[ticks.length - 2] < step) ticks.splice(ticks.length - 2, 1);
+  const showNow = now !== null && now >= lo * 60 && now <= hi * 60;
+
   return (
     <div ref={ref} className="relative w-full select-none" onMouseLeave={() => setTip(null)}>
-      <div className="relative overflow-hidden rounded-lg bg-soft" style={{ height: H }}>
+      <div className="relative" style={{ height: spanLanes * SPAN_LANE }}>
+        {spanLabels.map((l, i) => (
+          <span
+            key={i}
+            className="absolute whitespace-nowrap font-medium leading-none"
+            style={{ left: l.left, top: l.lane * SPAN_LANE + 3, fontSize: LABEL_PX, color }}
+          >
+            {l.text}
+          </span>
+        ))}
+      </div>
+
+      <div className="relative my-1 h-3.5">
+        <div className="absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-muted" />
         {dayEnd < hi * 60 && (
           <div
-            className="absolute inset-y-0 bg-amber-100/70"
+            className="absolute top-1/2 h-1.5 -translate-y-1/2 rounded-r-full bg-amber-300/70"
             style={{ left: x(dayEnd), right: 0 }}
             title={`超過 ${hhmm(dayEnd)}`}
           />
         )}
+        {ticks.map((h) => (
+          <span key={h} className="absolute top-1/2 h-2.5 w-px -translate-y-1/2 bg-border" style={{ left: x(h * 60) }} />
+        ))}
         {spans.map(({ pin, a, b }) => (
-          <div
+          <span
             key={pin.id}
-            className="absolute inset-y-0 border-x border-card"
-            style={{
-              left: x(a),
-              width: Math.max(2, x(b) - x(a)),
-              backgroundImage: `repeating-linear-gradient(135deg, color-mix(in srgb, ${pin.color} 45%, transparent) 0 3px, transparent 3px 7px)`,
-            }}
+            className="absolute top-1/2 h-3 -translate-y-1/2 rounded-full opacity-85"
+            style={{ left: x(a), width: Math.max(x(b) - x(a), 4), backgroundColor: color }}
             onMouseEnter={() => setTip({ x: x((a + b) / 2), text: `${pin.prefix}・${pin.title} ${pin.start}–${pin.end}` })}
           />
         ))}
-        {tasks.map(({ item, a, b }) => {
-          const done = frac(item) >= 1;
-          const over = b > dayEnd;
-          const color = colors[CATEGORY_OF[item.kind]];
-          return (
-            <button
-              key={item.id}
-              type="button"
-              aria-label={`${item.title} ${hhmm(a)}`}
-              onClick={() => onPick(item.id)}
-              onMouseEnter={() => setTip({ x: x((a + b) / 2), text: `${item.title} ${hhmm(a)}–${hhmm(b)}・${formatMinutes(item.minutes)}` })}
-              className="absolute rounded-[4px] border-x border-card"
-              style={{
-                left: x(a),
-                width: Math.max(4, x(b) - x(a)),
-                top: 5,
-                bottom: 5,
-                backgroundColor: color,
-                opacity: done ? 0.35 : 1,
-                boxShadow: over ? "inset 0 -3px 0 #d97706" : undefined,
-              }}
-            />
-          );
-        })}
+        {tasks.map(({ item, a, b }) => (
+          <button
+            key={item.id}
+            type="button"
+            aria-label={`${item.title} ${hhmm(a)}`}
+            onClick={() => onPick(item.id)}
+            onMouseEnter={() => setTip({ x: x((a + b) / 2), text: `${item.title} ${hhmm(a)}–${hhmm(b)}・${formatMinutes(item.minutes)}` })}
+            className="absolute top-1/2 h-1.5 -translate-y-1/2 rounded-full ring-2 ring-card"
+            style={{
+              left: x(a),
+              width: Math.max(x(b) - x(a), 4),
+              backgroundColor: colors[CATEGORY_OF[item.kind]],
+              opacity: frac(item) >= 1 ? 0.35 : 1,
+            }}
+          />
+        ))}
         {points.map(({ pin, a }) => (
           <span
             key={pin.id}
-            className="absolute top-1/2 size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 bg-card"
-            style={{ left: x(a), borderColor: pin.color }}
+            className="absolute top-1/2 size-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] bg-card"
+            style={{ left: x(a), borderColor: color }}
             onMouseEnter={() => setTip({ x: x(a), text: `${pin.title} ${pin.start}` })}
           />
         ))}
-        {now !== null && now >= lo * 60 && now <= hi * 60 && (
-          <div className="pointer-events-none absolute inset-y-0 w-0.5 bg-ink" style={{ left: x(now) - 1 }} />
+        {showNow && (
+          <span
+            className="pointer-events-none absolute -top-0.5 h-4.5 w-0.5 -translate-x-1/2 rounded-full bg-ink"
+            style={{ left: x(now) }}
+            title="現在"
+          />
         )}
       </div>
+
+      <div className="relative" style={{ height: pointLanes * POINT_LANE }}>
+        {pointLabels.map((l, i) => (
+          <span
+            key={i}
+            className="absolute whitespace-nowrap leading-none text-ink"
+            style={{ left: l.left, top: l.lane * POINT_LANE + 2, fontSize: LABEL_PX }}
+          >
+            {l.text}
+          </span>
+        ))}
+      </div>
+
       {tip && (
         <div
-          className="pointer-events-none absolute -top-7 z-10 whitespace-nowrap rounded-md bg-ink px-2 py-0.5 text-[11px] text-white shadow"
-          style={{ left: Math.min(Math.max(tip.x, 60), width - 60), transform: "translateX(-50%)" }}
+          className="pointer-events-none absolute -top-6 z-10 whitespace-nowrap rounded-md bg-ink px-2 py-0.5 text-[11px] text-white shadow"
+          style={{ left: Math.min(Math.max(tip.x, 70), width - 70), transform: "translateX(-50%)" }}
         >
           {tip.text}
         </div>
       )}
-      <div className="relative mt-1 h-3.5 text-[10px] leading-none tabular-nums text-muted-foreground">
-        {ticks.map((h) => (
+
+      <div className="relative mt-1 h-3.5 text-[10px] leading-none text-muted-foreground">
+        {ticks.map((h, i) => (
           <span
             key={h}
-            className="absolute -translate-x-1/2"
-            style={{ left: Math.min(Math.max(x(h * 60), 6), width - 6) }}
+            className="absolute tabular-nums"
+            style={{
+              left: x(h * 60),
+              transform: i === 0 ? "none" : i === ticks.length - 1 ? "translateX(-100%)" : "translateX(-50%)",
+            }}
           >
-            {h % 24}
+            {h === 24 ? "24" : String(h % 24)}
           </span>
         ))}
-        {now !== null && now >= lo * 60 && now <= hi * 60 && (
-          <span
-            className="absolute -translate-x-1/2 font-medium text-ink"
-            style={{ left: Math.min(Math.max(x(now), 14), width - 14), top: 12 }}
-          >
-            現在
-          </span>
-        )}
       </div>
-      <div className="h-3" />
     </div>
   );
 }

@@ -71,7 +71,7 @@ const minuteNow = () => {
   return now.getHours() * 60 + now.getMinutes();
 };
 
-export function TodayView({ me, isMine }: { me: string; isMine: boolean; color?: string }) {
+export function TodayView({ me, isMine, color }: { me: string; isMine: boolean; color: string }) {
   const school = useSchool();
   const life = useLife();
   const fitness = useFitness();
@@ -585,11 +585,12 @@ export function TodayView({ me, isMine }: { me: string; isMine: boolean; color?:
         <section className="rounded-2xl border border-border/70 bg-card p-4 sm:p-5">
           <div className="mb-3 flex items-baseline justify-between gap-2">
             <h3 className="font-display text-lg text-ink">時間條</h3>
-            <p className="text-[11px] text-muted-foreground">斜線是上課和行程・點色塊跳到那件事</p>
+            <p className="text-[11px] text-muted-foreground">粗線是行程・細線是要做的事，點一下跳過去</p>
           </div>
           <DayStrip
             items={items}
             pins={pins}
+            color={color}
             colors={CATEGORY_COLOR}
             frac={frac}
             dayStart={toMinutes(settings.dayStart)}
