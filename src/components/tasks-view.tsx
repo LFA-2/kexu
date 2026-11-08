@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { TimeField, parseTime } from "@/components/time-field";
+import { notifyAssignee } from "@/lib/push";
 import { createTask, deleteTask, formatSpan, listTasks, updateTask, type Task, type TaskFields } from "@/lib/tasks";
 import { ArrowLeft, Check, Gift, Pencil, Plus, Trash2, Undo2 } from "lucide-react";
 
@@ -194,6 +195,7 @@ export function TasksView({ people, onBack }: { people: Person[]; onBack: () => 
             if (editing === "new") {
               const t = await createTask(me.userId, assignee, fields);
               if (!t) return "建立失敗，請確認網路，以及你們仍然是連結狀態。";
+              notifyAssignee(t.id);
               setTasks((list) => [...(list ?? []), t].sort((a, b) => a.due_at.localeCompare(b.due_at)));
               setTab("assigned");
             } else {

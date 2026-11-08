@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+
+    // Deno, not bundled with the app.
+    "supabase/functions/**",
   ]),
 ]);
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { describeError } from "@/lib/supabase";
@@ -8,7 +8,8 @@ import { useAuth } from "@/store/auth-store";
 import { useLinks, type LinkedPerson } from "@/store/links-store";
 import { ThemePicker } from "@/components/theme-picker";
 import { hardReload } from "@/lib/hard-reload";
-import { ArrowLeft, Copy, LogOut, RefreshCw } from "lucide-react";
+import { disablePush, enablePush, getPushState, type PushState } from "@/lib/push";
+import { ArrowLeft, Bell, BellOff, Copy, LogOut, RefreshCw } from "lucide-react";
 
 const REQUEST_ERRORS = {
   not_found: "找不到這個連結碼。",
@@ -86,6 +87,10 @@ export function AccountView({ onBack }: { onBack: () => void }) {
             儲存
           </Button>
         </form>
+      </Section>
+
+      <Section title="通知" hint="每台裝置要各自開啟。連結的人指派任務給你的時候會跳通知。">
+        <NotificationToggle />
       </Section>
 
       <Section
@@ -190,6 +195,50 @@ export function AccountView({ onBack }: { onBack: () => void }) {
         <LogOut className="size-4" />
         登出
       </Button>
+    </div>
+  );
+}
+
+function NotificationToggle() {
+  const [state, setState] = useState<PushState | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    void getPushState().then(setState);
+  }, []);
+
+  const note = (text: string) => <p className="text-sm text-muted-foreground">{text}</p>;
+  if (state === null) return note("檢查中…");
+  if (state === "needs-install")
+    return note("iPhone 要先把這個 App「加入主畫面」，從主畫面打開才能開啟通知。");
+  if (state === "unsupported") return note("這個瀏覽器不支援通知。");
+  if (state === "denied")
+    return note("通知被關掉了。到 iPhone 的「設定 → 通知」找這個 App 重新允許。");
+
+  const on = state === "on";
+
+  async function toggle() {
+    setBusy(true);
+    setError(null);
+    if (on) {
+      await disablePush();
+      setState("off");
+    } else {
+      setError(await enablePush());
+      setState(await getPushState());
+    }
+    setBusy(false);
+  }
+
+  return (
+    <div className="space-y-2">
+      <Button variant={on ? "outline" : "default"} size="sm" disabled={busy} onClick={toggle}>
+        {on ? <BellOff /> : <Bell />}
+        {on ? "關閉這台裝置的通知" : "開啟通知"}
+      </Button>
+      {on && <p className="text-xs text-muted-foreground">這台裝置已經開啟。</p>}
+      {error && <p className="text-sm text-destructive">{error}</p>}
     </div>
   );
 }

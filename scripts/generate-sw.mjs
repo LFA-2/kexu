@@ -75,6 +75,35 @@ self.addEventListener("message", (event) => {
   if (event.data === "SKIP_WAITING") self.skipWaiting();
 });
 
+// iOS only delivers pushes to a home-screen app, and every push has to show a
+// notification or the subscription is revoked, so there is no silent path here.
+self.addEventListener("push", (event) => {
+  let payload = {};
+  try {
+    payload = event.data ? event.data.json() : {};
+  } catch {}
+  event.waitUntil(
+    self.registration.showNotification(payload.title || "你也許有點聰明", {
+      body: payload.body || "",
+      tag: payload.tag || "kexu",
+      data: { url: payload.url || BASE + "/" },
+      icon: BASE + "/icons/icon-192.png",
+      badge: BASE + "/icons/icon-192.png",
+    }),
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const target = (event.notification.data && event.notification.data.url) || BASE + "/";
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((windows) => {
+      const open = windows.find((w) => w.url.includes(BASE + "/"));
+      return open ? open.focus() : self.clients.openWindow(target);
+    }),
+  );
+});
+
 self.addEventListener("fetch", (event) => {
   const request = event.request;
   if (request.method !== "GET") return;

@@ -9,6 +9,7 @@
 - **生活**：每日狀態、今明行程、待做事項、習慣（每週哪幾天做哪些家事）、可約會日期。
 - **運動**：每週課表與訓練菜單（含範本）、逐組記錄與組間計時、有氧紀錄、每週趨勢、動作進步曲線、個人紀錄、體重體脂。連結的人可以看。
 - **共同**：兩人今天的狀態與行程、會議紀錄（兩人都能編輯，待辦會出現在被指派者的「今日」）、小遊戲。
+- **指派任務**（共同）：給連結的人下任務，設定期限與獎勵。對方開啟通知後，被指派時手機會跳通知。
 
 ## 安裝到 iPhone
 
@@ -31,10 +32,27 @@
 - 舊版（本機儲存）的資料會在該裝置第一次登入時自動上傳；也可用「匯入備份」匯入備份檔
 - 目前沒有「忘記密碼」：需要另外設定 SMTP 寄信服務才能開啟
 
+## 通知
+
+被指派任務時，手機會收到一則推播。
+
+- 只有 iOS 16.4 以上、而且**從主畫面打開**的 App 收得到；Safari 分頁裡沒有這個功能
+- 每台裝置要各自在「帳號與連結 → 通知」按一次「開啟通知」，訂閱存在 `public.push_subscriptions`
+- 送出的人是 Edge Function `supabase/functions/notify-task`，由指派者的瀏覽器在任務建好後呼叫；它用 service role 查收件人的訂閱，並刪掉已失效的（回應 404／410）
+- 需要一組 VAPID 金鑰：公鑰放前端 `NEXT_PUBLIC_VAPID_PUBLIC_KEY`（本機 `.env.local`，GitHub Actions 讀 repo variable `VAPID_PUBLIC_KEY`），私鑰放 Supabase secrets
+
+```bash
+npx supabase secrets set VAPID_PUBLIC_KEY=... VAPID_PRIVATE_KEY=... VAPID_SUBJECT=mailto:你的信箱
+npx supabase functions deploy notify-task
+```
+
+開發模式不註冊 service worker，所以通知只能在建置後的站台上測。
+
 ## 後端（Supabase）
 
 - 專案：`kexu`（ap-northeast-1），schema 在 `supabase/migrations/`，Auth 設定在 `supabase/config.toml`
-- 修改 schema：新增 migration 後執行 `npx supabase db push --linked`；修改設定：`npx supabase config push`
+- Edge Functions 在 `supabase/functions/`，部署：`npx supabase functions deploy <名稱>`
+- 修改 schema：新增 migration 後執行 `npx supabase db push --remote`；修改設定：`npx supabase config push`
 - 前端需要 `NEXT_PUBLIC_SUPABASE_URL` 與 `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`：本機放 `.env.local`，GitHub Actions 讀 repo variables `SUPABASE_URL`、`SUPABASE_PUBLISHABLE_KEY`
 
 ## 更新
