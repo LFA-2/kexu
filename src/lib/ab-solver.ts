@@ -182,20 +182,3 @@ export function reviewTurn(history: Turn[], guess: string): TurnReview | null {
 export function reviewGame(turns: Turn[]): (TurnReview | null)[] {
   return turns.map((t, i) => reviewTurn(turns.slice(0, i), t.guess));
 }
-
-export type Grade = "S" | "A" | "B" | "C";
-
-/**
- * Share of the best guess's information this guess got, on a log scale: halving the
- * possibilities counts the same early and late. 1 means as good as the best guess.
- */
-export function efficiency(r: TurnReview): number {
-  if (r.optimal) return 1;
-  if (r.bestExpected <= 0 || r.played >= r.before) return 0;
-  return Math.log(r.before / r.played) / Math.log(r.before / r.bestExpected);
-}
-
-export function gradeOf(r: TurnReview): Grade {
-  const e = efficiency(r);
-  return r.optimal ? "S" : e >= 0.9 ? "A" : e >= 0.7 ? "B" : "C";
-}

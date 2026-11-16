@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatShortDate } from "@/lib/dates";
 import { describeError } from "@/lib/supabase";
-import { gradeOf, type Grade, type TurnReview } from "@/lib/ab-solver";
+import type { TurnReview } from "@/lib/ab-solver";
 import { useAbGame, type Guess, type PastGuess } from "@/store/ab-game";
 import { useAbReviews } from "@/store/ab-review";
 import { ArrowLeft, Check } from "lucide-react";
@@ -244,7 +244,7 @@ const fmtCount = (n: number) => (n < 10 ? n.toFixed(1).replace(/\.0$/, "") : Mat
  * previous turn's expected remaining (10,000 for the first), and the guess played and the
  * best guess scale that by the share of possibilities they were expected to leave.
  */
-type Shown = { before: number; played: number; best: string; bestExpected: number; optimal: boolean; grade: Grade };
+type Shown = { before: number; played: number; best: string; bestExpected: number; optimal: boolean };
 
 function shownReviews(reviews: (TurnReview | null | undefined)[]): (Shown | null | undefined)[] {
   let before = 10000;
@@ -263,31 +263,10 @@ function shownReviews(reviews: (TurnReview | null | undefined)[]): (Shown | null
       best: r.best,
       bestExpected: (before * r.bestExpected) / r.before,
       optimal: r.optimal,
-      grade: gradeOf(r),
     };
     before = shown.played;
     return shown;
   });
-}
-
-const GRADE_STYLE: Record<Grade, string> = {
-  S: "bg-amber-500",
-  A: "bg-emerald-600",
-  B: "bg-sky-600",
-  C: "bg-zinc-400",
-};
-
-function GradeBadge({ grade }: { grade: Grade | undefined }) {
-  return grade ? (
-    <span
-      className={`flex size-6 shrink-0 items-center justify-center rounded-md text-xs font-bold text-white ${GRADE_STYLE[grade]}`}
-      aria-label={`評分 ${grade}`}
-    >
-      {grade}
-    </span>
-  ) : (
-    <span className="size-6 shrink-0 rounded-md bg-wash" aria-hidden />
-  );
 }
 
 /** Under a guess: the best guess at that point and how far it could have narrowed things. */
@@ -318,7 +297,6 @@ function GuessList({ guesses }: { guesses: Guess[] }) {
             <span className="w-6 pt-1 text-right text-xs tabular-nums text-muted-foreground">{i + 1}</span>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2.5">
-                <GradeBadge grade={reviews[i]?.grade} />
                 <span className="w-18 shrink-0 font-display text-lg tracking-[0.3em] tabular-nums text-ink">{g.guess}</span>
                 {reviews[i] && (
                   <span className="text-[11px] tabular-nums text-muted-foreground">剩約 {fmtCount(reviews[i]!.played)}</span>
@@ -328,9 +306,7 @@ function GuessList({ guesses }: { guesses: Guess[] }) {
                   <span className="text-amber-700">{g.b}B</span>
                 </span>
               </div>
-              <div className="pl-8.5">
-                <ReviewLine review={reviews[i]} />
-              </div>
+              <ReviewLine review={reviews[i]} />
             </div>
           </li>
         ))}
