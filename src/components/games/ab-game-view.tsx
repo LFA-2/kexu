@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatShortDate } from "@/lib/dates";
 import { describeError } from "@/lib/supabase";
-import type { TurnReview } from "@/lib/ab-solver";
+import { gradeOf, type Grade, type TurnReview } from "@/lib/ab-solver";
 import { useAbGame, type Guess, type PastGuess } from "@/store/ab-game";
 import { useAbReviews } from "@/store/ab-review";
 import { ArrowLeft, Check } from "lucide-react";
@@ -244,7 +244,7 @@ const fmtCount = (n: number) => (n < 10 ? n.toFixed(1).replace(/\.0$/, "") : Mat
  * previous turn's expected remaining (10,000 for the first), and the guess played and the
  * best guess scale that by the share of possibilities they were expected to leave.
  */
-type Shown = { before: number; played: number; best: string; bestExpected: number; optimal: boolean };
+type Shown = { before: number; played: number; best: string; bestExpected: number; optimal: boolean; grade: Grade };
 
 function shownReviews(reviews: (TurnReview | null | undefined)[]): (Shown | null | undefined)[] {
   let before = 10000;
@@ -263,10 +263,31 @@ function shownReviews(reviews: (TurnReview | null | undefined)[]): (Shown | null
       best: r.best,
       bestExpected: (before * r.bestExpected) / r.before,
       optimal: r.optimal,
+      grade: gradeOf(r),
     };
     before = shown.played;
     return shown;
   });
+}
+
+const GRADE_STYLE: Record<Grade, string> = {
+  S: "bg-amber-500",
+  A: "bg-emerald-600",
+  B: "bg-sky-600",
+  C: "bg-zinc-400",
+};
+
+function GradeBadge({ grade }: { grade: Grade | undefined }) {
+  return grade ? (
+    <span
+      className={`flex size-6 shrink-0 items-center justify-center rounded-md text-xs font-bold text-white ${GRADE_STYLE[grade]}`}
+      aria-label={`評分 ${grade}`}
+    >
+      {grade}
+    </span>
+  ) : (
+    <span className="size-6 shrink-0 rounded-md bg-wash" aria-hidden />
+  );
 }
 
 /** One line of review under a guess: judged on what it could be expected to rule out. */
@@ -301,21 +322,21 @@ function GuessList({ guesses }: { guesses: Guess[] }) {
           <li key={g.id} className="flex items-start gap-3">
             <span className="w-6 pt-1 text-right text-xs tabular-nums text-muted-foreground">{i + 1}</span>
             <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2.5">
+                <GradeBadge grade={reviews[i]?.grade} />
                 <span className="font-display text-lg tracking-[0.3em] tabular-nums text-ink">{g.guess}</span>
                 <span className="ml-auto text-sm font-medium tabular-nums">
                   <span className="text-primary">{g.a}A</span>
                   <span className="text-amber-700">{g.b}B</span>
                 </span>
               </div>
-              <ReviewLine review={reviews[i]} />
+              <div className="pl-8.5">
+                <ReviewLine review={reviews[i]} />
+              </div>
             </div>
           </li>
         ))}
       </ol>
-      <p className="text-[11px] leading-relaxed text-muted-foreground">
-        檢討：這一手平均會剩幾種可能（越少越好），以及當時能剩最少的猜法。看的是預期的資訊量，不是運氣好壞；「猜之前」接續上一手的預期，不透露實際剩幾種。
-      </p>
     </div>
   );
 }
