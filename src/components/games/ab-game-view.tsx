@@ -238,14 +238,44 @@ function MySecretCard({
 
 const fmtCount = (n: number) => (n < 10 ? n.toFixed(1).replace(/\.0$/, "") : Math.round(n).toLocaleString());
 
+/**
+ * What a review line shows. Real candidate counts would give away what the answers
+ * revealed, so the shown numbers are a chain of expectations: each turn starts from the
+ * previous turn's expected remaining (10,000 for the first), and the guess played and the
+ * best guess scale that by the share of possibilities they were expected to leave.
+ */
+type Shown = { before: number; played: number; best: string; bestExpected: number; optimal: boolean };
+
+function shownReviews(reviews: (TurnReview | null | undefined)[]): (Shown | null | undefined)[] {
+  let before = 10000;
+  let broken: null | undefined = undefined;
+  let stopped = false;
+  return reviews.map((r) => {
+    if (stopped) return broken;
+    if (!r) {
+      stopped = true;
+      broken = r;
+      return r;
+    }
+    const shown = {
+      before,
+      played: (before * r.played) / r.before,
+      best: r.best,
+      bestExpected: (before * r.bestExpected) / r.before,
+      optimal: r.optimal,
+    };
+    before = shown.played;
+    return shown;
+  });
+}
+
 /** One line of review under a guess: judged on what it could be expected to rule out. */
-function ReviewLine({ review }: { review: TurnReview | null | undefined }) {
+function ReviewLine({ review }: { review: Shown | null | undefined }) {
   if (review === undefined) return <p className="text-[11px] text-muted-foreground">分析中…</p>;
   if (review === null) return null;
-  const left = review.before === 1 ? "只剩 1 種可能" : `猜之前剩 ${review.before.toLocaleString()} 種`;
   return (
     <p className="text-[11px] leading-snug text-muted-foreground">
-      {left}・這次預期剩 <span className="tabular-nums text-ink">{fmtCount(review.played)}</span>
+      猜之前約 {fmtCount(review.before)} 種・這次預期剩 <span className="tabular-nums text-ink">{fmtCount(review.played)}</span>
       {review.optimal ? (
         <span className="ml-1 inline-flex items-center gap-0.5 text-primary">
           <Check className="size-3" />
@@ -262,7 +292,7 @@ function ReviewLine({ review }: { review: TurnReview | null | undefined }) {
 }
 
 function GuessList({ guesses }: { guesses: Guess[] }) {
-  const reviews = useAbReviews(guesses);
+  const reviews = shownReviews(useAbReviews(guesses));
   if (guesses.length === 0) return null;
   return (
     <div className="space-y-2">
@@ -284,7 +314,7 @@ function GuessList({ guesses }: { guesses: Guess[] }) {
         ))}
       </ol>
       <p className="text-[11px] leading-relaxed text-muted-foreground">
-        檢討：以猜之前的線索，算這一手平均會剩幾種可能（越少越好），以及當時能剩最少的猜法。看的是預期的資訊量，不是運氣好壞。
+        檢討：這一手平均會剩幾種可能（越少越好），以及當時能剩最少的猜法。看的是預期的資訊量，不是運氣好壞；「猜之前」接續上一手的預期，不透露實際剩幾種。
       </p>
     </div>
   );
