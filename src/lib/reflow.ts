@@ -1,79 +1,93 @@
 /**
- * Order-first scheduling for the 今日 list: the user decides the order, the times follow.
- * Items are laid one after another from `cursor`, stepping around blocked intervals
- * (classes, 行程, items whose time is pinned).
+ * The one layout engine for the 今日 list, used both when the planner makes a day and
+ * when the user reorders it. Items are laid out around blocked intervals (classes, 行程,
+ * items whose time is fixed), with a short break between tasks, and never past `end`.
  */
 export type Interval = [number, number];
 
 export const REFLOW_STEP = 5;
+/** Minutes of rest kept between two laid-out tasks. */
+export const BREAK = 10;
 
 const up = (m: number) => Math.ceil(m / REFLOW_STEP) * REFLOW_STEP;
 
-function earliestFit(from: number, dur: number, blocked: Interval[]) {
-  let t = up(from);
-  for (let n = 0; n <= blocked.length + 1; n++) {
-    const hit = blocked.find(([a, b]) => t < b && t + dur > a);
-    if (!hit) return t;
-    t = up(hit[1]);
-  }
-  return t;
-}
+export type FlowItem = {
+  id: string;
+  dur: number;
+  /** Earliest start, minutes of day ("不早於"). */
+  after?: number;
+  /** Items sharing a group (parts of one task, units of one course) keep their order. */
+  group?: string;
+};
 
-/** Start of the next blocked interval at or after t (or Infinity), and the end of one t sits in. */
-function room(t: number, blocked: Interval[]) {
-  const inside = blocked.find(([a, b]) => t >= a && t < b);
-  if (inside) return { inside: inside[1], next: t };
-  const next = Math.min(Infinity, ...blocked.filter(([a]) => a >= t).map(([a]) => a));
-  return { inside: null, next };
+/**
+ * Minute of day each item starts at. Items that can't fit before `end` are left out
+ * of the map: they are 今天排不下.
+ *
+ * sequential: keep the given order exactly, each item after the one before it.
+ * packed: each item takes the earliest slot that fits, so later short items can fill
+ * gaps earlier items were too long for (groups still keep their order).
+ */
+export function reflow(
+  items: FlowItem[],
+  blocked: Interval[],
+  cursor: number,
+  end: number,
+  packed = false,
+): Map<string, number> {
+  const out = new Map<string, number>();
+  const hard = [...blocked].sort((a, b) => a[0] - b[0]);
+  /** Laid-out tasks, padded with BREAK on both sides. */
+  const soft: Interval[] = [];
+  const groupEnd = new Map<string, number>();
+  const groupStuck = new Set<string>();
+  let last = cursor;
+
+  const clash = (s: number, e: number) =>
+    hard.some(([a, b]) => s < b && e > a) || soft.some(([a, b]) => s < b && e > a);
+
+  for (const it of items) {
+    const dur = Math.max(REFLOW_STEP, it.dur);
+    if (it.group && groupStuck.has(it.group)) continue;
+    let from = Math.max(cursor, it.after ?? 0, packed ? cursor : last);
+    if (it.group && groupEnd.has(it.group)) from = Math.max(from, groupEnd.get(it.group)! + BREAK);
+    from = up(from);
+    // The earliest feasible start is `from` or the end of some interval after it.
+    const candidates = [from, ...hard.map(([, b]) => up(b)), ...soft.map(([, b]) => up(b))]
+      .filter((t) => t >= from)
+      .sort((a, b) => a - b);
+    const t = candidates.find((c) => c + dur <= end && !clash(c, c + dur));
+    if (t === undefined) {
+      if (it.group) groupStuck.add(it.group);
+      continue;
+    }
+    out.set(it.id, t);
+    soft.push([t - BREAK, t + dur + BREAK]);
+    last = t + dur + BREAK;
+    if (it.group) groupEnd.set(it.group, t + dur);
+  }
+  return out;
 }
 
 /**
- * Minute of day each item starts at.
- * strict: keep the given order exactly.
- * fill: when the next item doesn't fit before a blocked interval, pull a later one that does.
+ * Within each group, put the members back in their natural order (part 1 before part 2,
+ * unit 3 before unit 4) while keeping the positions the group occupies in `order`.
  */
-export function reflow(
-  items: { id: string; dur: number }[],
-  blocked: Interval[],
-  cursor: number,
-  fill = false,
-): Map<string, number> {
-  const out = new Map<string, number>();
-  const sorted = [...blocked].sort((a, b) => a[0] - b[0]);
-  let t = cursor;
-  if (!fill) {
-    for (const it of items) {
-      const s = earliestFit(t, Math.max(REFLOW_STEP, it.dur), sorted);
-      out.set(it.id, s);
-      t = s + Math.max(REFLOW_STEP, it.dur);
-    }
-    return out;
-  }
-  const left = [...items];
-  let guard = 0;
-  while (left.length && guard++ < 500) {
-    t = up(t);
-    const r = room(t, sorted);
-    if (r.inside !== null) {
-      t = r.inside;
-      continue;
-    }
-    const gap = r.next - t;
-    const k = left.findIndex((it) => Math.max(REFLOW_STEP, it.dur) <= gap);
-    if (k === -1) {
-      const end = sorted.find(([a]) => a === r.next)?.[1];
-      if (end === undefined) break;
-      t = end;
-      continue;
-    }
-    const [it] = left.splice(k, 1);
-    out.set(it.id, t);
-    t += Math.max(REFLOW_STEP, it.dur);
-  }
-  for (const it of left) {
-    const s = earliestFit(t, Math.max(REFLOW_STEP, it.dur), sorted);
-    out.set(it.id, s);
-    t = s + Math.max(REFLOW_STEP, it.dur);
+export function keepChains(
+  order: string[],
+  chain: (id: string) => { group: string; rank: number } | undefined,
+): string[] {
+  const slots = new Map<string, number[]>();
+  order.forEach((id, k) => {
+    const c = chain(id);
+    if (!c) return;
+    slots.set(c.group, [...(slots.get(c.group) ?? []), k]);
+  });
+  const out = [...order];
+  for (const positions of slots.values()) {
+    if (positions.length < 2) continue;
+    const members = positions.map((k) => order[k]).sort((a, b) => chain(a)!.rank - chain(b)!.rank);
+    positions.forEach((k, j) => (out[k] = members[j]));
   }
   return out;
 }

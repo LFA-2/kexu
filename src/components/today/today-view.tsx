@@ -44,11 +44,12 @@ import {
   sortItems,
   sourceProgress,
   unitBlockers,
+  workChain,
   workItem,
   type LiveSources,
   type OpenAction,
 } from "@/lib/planner";
-import { hhmm, reflow, type Interval } from "@/lib/reflow";
+import { hhmm, keepChains, reflow, type Interval } from "@/lib/reflow";
 import { formatMinutes } from "@/lib/types";
 import { uid } from "@/lib/utils";
 import { useFitness } from "@/store/fitness-store";
@@ -58,6 +59,7 @@ import { usePeopleData } from "@/store/people-data";
 import { useSchool } from "@/store/school-store";
 import {
   CalendarHeart,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Plus,
@@ -65,7 +67,8 @@ import {
   Settings2,
 } from "lucide-react";
 
-const LAST_START = 23 * 60 + 55;
+const UNDO_MS = 6000;
+const OVERVIEW_KEY = "kexu:today-overview-open";
 const minuteNow = () => {
   const now = new Date();
   return now.getHours() * 60 + now.getMinutes();
@@ -93,19 +96,52 @@ export function TodayView({ me, isMine, color }: { me: string; isMine: boolean; 
         <span className="font-normal text-amber-800/80">和{freeWith.map((p) => p.name).join("、")}</span>
       </p>
     ) : null;
-  const [date, setDate] = useState(todayKey);
+  // null follows today, so a page left open overnight moves on to the new day.
+  const [picked, setPicked] = useState<string | null>(null);
+  const date = picked ?? todayKey;
+  const setDate = (d: string) => setPicked(d === todayKey ? null : d);
   const [meetings, setMeetings] = useState<Meeting[] | null>(isMine ? null : []);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [adding, setAdding] = useState<{ start?: string } | null>(null);
   const [flashId, setFlashId] = useState<string | null>(null);
   const [clock, setClock] = useState(minuteNow);
   useEffect(() => {
-    const t = setInterval(() => setClock(minuteNow()), 60_000);
-    return () => clearInterval(t);
+    const tick = () => setClock(minuteNow());
+    const t = setInterval(tick, 60_000);
+    // Timers pause while the PWA is in the background; catch up when it comes back.
+    const onVisible = () => document.visibilityState === "visible" && tick();
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", tick);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", tick);
+    };
   }, []);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [mode, setMode] = useState<"day" | "week">("day");
-  const [adjustingDate, setAdjustingDate] = useState<string | null>(null);
+  const undoSeq = useRef(0);
+  const [undo, setUndo] = useState<{ id: number; label: string; restore: () => void } | null>(null);
+  useEffect(() => {
+    if (!undo) return;
+    const t = setTimeout(() => setUndo((u) => (u?.id === undo.id ? null : u)), UNDO_MS);
+    return () => clearTimeout(t);
+  }, [undo]);
+  const [overviewOpen, setOverviewOpen] = useState(() => {
+    try {
+      return typeof window !== "undefined" && window.localStorage.getItem(OVERVIEW_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+  function toggleOverview(open: boolean) {
+    setOverviewOpen(open);
+    try {
+      window.localStorage.setItem(OVERVIEW_KEY, open ? "1" : "0");
+    } catch {
+      // per-viewer convenience only
+    }
+  }
 
   const refreshMeetings = useCallback(async () => {
     if (!isMine) return;
@@ -140,28 +176,29 @@ export function TodayView({ me, isMine, color }: { me: string; isMine: boolean; 
 
   // Days after today are planned live (carrying work forward); only hand edits are stored.
   const weekStartKey = toDateKey(startOfWeek(parseISO(date), { weekStartsOn: 1 }));
-  const weekEndKey = toDateKey(addDays(parseISO(weekStartKey), 6));
-  const aheadTo = weekEndKey > date ? weekEndKey : date;
-  const [nowMinute] = useState(() => {
-    const now = new Date();
-    return Math.ceil((now.getHours() * 60 + now.getMinutes()) / 15) * 15;
-  });
-  const ahead: Record<string, DayPlan> =
-    aheadTo <= todayKey || !loaded || meetings === null
-      ? {}
-      : planAhead(
-      {
-        school,
-        life,
-        fitness,
-        exercises: fitness.allExercises,
-        actions: actions.filter((a) => !a.action.done),
-        fromMinute: nowMinute,
-      },
-      todayKey,
-      aheadTo,
-        life.plans ?? {},
-      );
+  // Planning ahead is the heavy part of this page: only redo it when its inputs change
+  // (the clock moves it at most every 15 minutes).
+  const nowMinute = Math.ceil(clock / 15) * 15;
+  const ahead = useMemo<Record<string, DayPlan>>(() => {
+    const weekEnd = toDateKey(addDays(startOfWeek(parseISO(date), { weekStartsOn: 1 }), 6));
+    const aheadTo = weekEnd > date ? weekEnd : date;
+    return aheadTo <= todayKey || !loaded || meetings === null
+        ? {}
+        : planAhead(
+            {
+              school,
+              life,
+              fitness,
+              exercises: fitness.allExercises,
+              actions: actions.filter((a) => !a.action.done),
+              fromMinute: nowMinute,
+            },
+            todayKey,
+            aheadTo,
+            life.plans ?? {},
+          );
+  }, [date, todayKey, loaded, meetings, school, life, fitness, actions, nowMinute],
+  );
   // A plan stored ahead of its day only holds hand edits until that day is planned.
   const planFor = (d: string): DayPlan | undefined => {
     const stored = life.plans?.[d];
@@ -364,8 +401,19 @@ export function TodayView({ me, isMine, color }: { me: string; isMine: boolean; 
     );
   }
 
+  /** Run a change to some days' plans and offer to put them back as they were. */
+  function withUndo(label: string, dates: string[], act: () => void) {
+    const before = dates.map((d) => [d, life.plans?.[d]] as const);
+    act();
+    setUndo({
+      id: ++undoSeq.current,
+      label,
+      restore: () => before.forEach(([d, p]) => life.updatePlan(d, () => p)),
+    });
+  }
+
   function regenerate() {
-    life.updatePlan(date, (prev) => build(prev));
+    withUndo("已重新排", [date], () => life.updatePlan(date, (prev) => build(prev)));
     refreshMeetings();
   }
 
@@ -380,6 +428,10 @@ export function TodayView({ me, isMine, color }: { me: string; isMine: boolean; 
           : prev.dismissed,
       };
     });
+  }
+
+  function removeWithUndo(item: PlanItem) {
+    withUndo(`已拿掉「${item.title}」`, [date], () => removeItem(item));
   }
 
   function saveItem(item: PlanItem) {
@@ -398,16 +450,26 @@ export function TodayView({ me, isMine, color }: { me: string; isMine: boolean; 
   const isToday = date === todayKey;
   const canFlow = !readOnly && !isFuture;
   const flowNow = isToday ? clock : null;
-  const dayStartMin = toMinutes((life.planSettings ?? DEFAULT_PLAN_SETTINGS).dayStart);
+  const settings = life.planSettings ?? DEFAULT_PLAN_SETTINGS;
+  const dayStartMin = toMinutes(settings.dayStart);
+  const dayEndMin = toMinutes(settings.dayEnd);
+  const chain = useMemo(() => workChain(school), [school]);
   /** Items that keep their time: pinned, finished, or being done right now. */
   const lockedItem = (i: PlanItem) =>
     !!i.pinned ||
     frac(i) >= 1 ||
     (flowNow !== null && !!i.start && toMinutes(i.start) <= flowNow && flowNow < toMinutes(i.start) + i.minutes);
-  const movableOf = (list: PlanItem[]) => sortItems(list).filter((i) => !lockedItem(i)).map((i) => i.id);
+  /** Where an item sits in the order: its time, or the earliest time it asked for. */
+  const orderKey = (i: PlanItem) => i.start || i.after || "99:99";
+  const movableOf = (list: PlanItem[]) =>
+    [...list]
+      .sort((a, b) => orderKey(a).localeCompare(orderKey(b)))
+      .filter((i) => !lockedItem(i))
+      .map((i) => i.id);
   const movableOrder = canFlow ? movableOf(items) : [];
 
-  function timesFor(list: PlanItem[], order: string[], fill = false) {
+  /** Start minute for each movable item in `order`; missing ones don't fit today. */
+  function timesFor(list: PlanItem[], order: string[], packed = false) {
     const blocked: Interval[] = [
       ...pins
         .filter((p) => !p.point && p.end)
@@ -422,47 +484,71 @@ export function TodayView({ me, isMine, color }: { me: string; isMine: boolean; 
         .map((i): Interval => [toMinutes(i.start), toMinutes(i.start) + i.minutes]),
     ];
     const byId = new Map(list.map((i) => [i.id, i]));
-    const flow = order.flatMap((id) => {
+    const chainOf = (id: string) => {
       const it = byId.get(id);
-      return it ? [{ id, dur: it.minutes }] : [];
+      return it ? chain(it) : undefined;
+    };
+    // Part 2 never goes before part 1, unit 4 never before unit 3.
+    const flow = keepChains(order, chainOf).flatMap((id) => {
+      const it = byId.get(id);
+      return it
+        ? [{ id, dur: it.minutes, after: it.after ? toMinutes(it.after) : undefined, group: chainOf(id)?.group }]
+        : [];
     });
-    return reflow(flow, blocked, Math.max(dayStartMin, flowNow ?? 0), fill);
+    return reflow(flow, blocked, Math.max(dayStartMin, flowNow ?? 0), dayEndMin, packed);
   }
 
   /** Change the day's items, then lay the movable ones out again from now. */
-  function flowPlan(change: (list: PlanItem[]) => { items: PlanItem[]; order?: string[]; fill?: boolean }) {
+  function flowPlan(
+    change: (base: DayPlan) => { items: PlanItem[]; order?: string[]; packed?: boolean; dismissed?: string[] },
+  ) {
     life.updatePlan(date, (prev) => {
       const base = prev && !(isToday && isDraftPlan(date, prev)) ? prev : plan;
       if (!base) return prev;
-      const r = change(base.items);
-      const map = timesFor(r.items, r.order ?? movableOf(r.items), r.fill);
+      const r = change(base);
+      const order = r.order ?? movableOf(r.items);
+      const movable = new Set(order);
+      const map = timesFor(r.items, order, r.packed);
       return {
         ...base,
+        dismissed: r.dismissed ?? base.dismissed,
         items: r.items.map((i) => {
+          if (!movable.has(i.id)) return i;
           const m = map.get(i.id);
-          return m === undefined ? i : { ...i, start: hhmm(Math.min(m, LAST_START)), manual: true };
+          return { ...i, start: m === undefined ? "" : hhmm(m) };
         }),
       };
     });
   }
 
-  function saveFromPanel(before: PlanItem, next: PlanItem, follow: boolean) {
+  function saveFromPanel(before: PlanItem, next: PlanItem) {
     const timing =
-      follow || next.start !== before.start || next.minutes !== before.minutes || !!next.pinned !== !!before.pinned;
+      next.start !== before.start ||
+      next.minutes !== before.minutes ||
+      !!next.pinned !== !!before.pinned ||
+      next.after !== before.after;
     if (!canFlow || !timing) {
-      saveItem({ ...next, manual: true });
+      saveItem(next);
       return;
     }
-    flowPlan((list) => {
-      const updated = list.map((i) => (i.id === next.id ? { ...next, manual: true } : i));
-      // Following keeps its place in the order; otherwise the new time decides it.
-      return { items: updated, order: follow ? movableOf(list).filter((id) => updated.some((u) => u.id === id && !u.pinned)) : undefined };
-    });
+    // The item takes its place in the order by its (new) time; the rest flow around it.
+    flowPlan((base) => ({ items: base.items.map((i) => (i.id === next.id ? next : i)) }));
   }
 
-  function moveToTomorrow(item: PlanItem) {
+  function addItem(item: PlanItem) {
+    if (!canFlow) {
+      saveItem(item);
+      return;
+    }
+    flowPlan((base) => ({
+      items: [...base.items.filter((i) => i.id !== item.id), item],
+      dismissed: (base.dismissed ?? []).filter((d) => d !== `${item.kind}:${item.refId}`),
+    }));
+  }
+
+  function carryToTomorrow(item: PlanItem) {
     const tomorrow = toDateKey(addDays(parseISO(todayKey), 1));
-    const carried: PlanItem = { ...item, id: uid("pi"), start: "", progress: 0, pinned: false, manual: true };
+    const carried: PlanItem = { ...item, id: uid("pi"), start: "", progress: 0, pinned: undefined, after: undefined };
     if ((item.kind === "homework" || item.kind === "unit") && item.share !== undefined) {
       const now = sourceProgress(item, src) ?? item.base ?? 0;
       const goal = Math.min(100, (item.base ?? 0) + item.share);
@@ -481,6 +567,24 @@ export function TodayView({ me, isMine, color }: { me: string; isMine: boolean; 
     removeItem(item);
   }
 
+  const tomorrowKey = toDateKey(addDays(parseISO(todayKey), 1));
+  function moveToTomorrow(item: PlanItem) {
+    withUndo(`「${item.title}」移到明天了`, [todayKey, tomorrowKey], () => carryToTomorrow(item));
+  }
+
+  /** Unfinished, unfixed items whose time is already over. */
+  const overdue =
+    canFlow && isToday
+      ? items.filter((i) => !i.pinned && i.start && frac(i) < 1 && toMinutes(i.start) + i.minutes <= clock)
+      : [];
+  function rollForward() {
+    withUndo("已從現在往後排", [date], () => flowPlan((base) => ({ items: base.items })));
+  }
+  const unfit = items.filter((i) => !i.start && frac(i) < 1);
+  function moveUnfitToTomorrow() {
+    withUndo(`${unfit.length} 件事移到明天了`, [todayKey, tomorrowKey], () => unfit.forEach(carryToTomorrow));
+  }
+
   function pick(id: string) {
     setFlashId(id);
     document.querySelector(`[data-task-id="${id}"]`)?.scrollIntoView({ block: "center", behavior: "smooth" });
@@ -491,9 +595,6 @@ export function TodayView({ me, isMine, color }: { me: string; isMine: boolean; 
 
   const dateLabel = format(parseISO(date), "M 月 d 日 EEEE", { locale: zhTW });
   const isPast = date < todayKey;
-  const settings = life.planSettings ?? DEFAULT_PLAN_SETTINGS;
-  const adjusting = adjustingDate === date;
-  const canAdjust = canFlow && movableOrder.length > 0;
   const editing = editingId ? items.find((i) => i.id === editingId) ?? null : null;
 
   const modeToggle = (
@@ -534,21 +635,30 @@ export function TodayView({ me, isMine, color }: { me: string; isMine: boolean; 
     );
   }
 
+  const hasStrip = items.some((i) => i.start) || pins.length > 0;
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="text-sm text-muted-foreground">
-            {date === todayKey
-              ? "依截止日、預估時間和課表空檔自動排好，可以自己再調整"
-              : isPast
-                ? "回顧這天的完成狀況"
-                : "預先排好的安排，會隨你的進度自動更新"}
-          </p>
-          <h2 className="font-display mt-1 text-2xl tracking-tight text-ink sm:text-3xl">
-            {date === todayKey ? "今日" : date === toDateKey(addDays(new Date(), 1)) ? "明天" : dateLabel}
-          </h2>
-          {dateBadge}
+        <div className="flex items-center gap-3">
+          {plan && items.length > 0 && (
+            <ProgressRing pct={completion ?? 0} size={56} stroke={6} compact label={undefined} />
+          )}
+          <div className="min-w-0">
+            <h2 className="font-display text-2xl tracking-tight text-ink sm:text-3xl">
+              {date === todayKey ? "今日" : date === tomorrowKey ? "明天" : dateLabel}
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              {plan && items.length > 0
+                ? `${doneCount}/${items.length} 項完成・${formatMinutes(Math.round(doneMin))} / ${formatMinutes(totalMin)}`
+                : date === todayKey
+                  ? "依截止日、預估時間和課表空檔自動排好"
+                  : isPast
+                    ? "回顧這天的完成狀況"
+                    : "預先排好的安排，會隨你的進度自動更新"}
+            </p>
+            {dateBadge}
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {modeToggle}
@@ -581,94 +691,32 @@ export function TodayView({ me, isMine, color }: { me: string; isMine: boolean; 
         </div>
       </header>
 
-      {(items.some((i) => i.start) || pins.length > 0) && (
-        <section className="rounded-2xl border border-border/70 bg-card p-4 sm:p-5">
-          <div className="mb-3 flex items-baseline justify-between gap-2">
-            <h3 className="font-display text-lg text-ink">時間條</h3>
-            <p className="text-[11px] text-muted-foreground">粗線是行程・細線是要做的事，點一下跳過去</p>
-          </div>
-          <DayStrip
-            items={items}
-            pins={pins}
-            color={color}
-            colors={CATEGORY_COLOR}
-            frac={frac}
-            dayStart={toMinutes(settings.dayStart)}
-            dayEnd={toMinutes(settings.dayEnd)}
-            now={isToday && clock >= 0 ? clock : null}
-            onPick={pick}
-          />
-        </section>
-      )}
-
-      <section className="grid gap-4 rounded-2xl border border-border/70 bg-card p-4 sm:grid-cols-[auto_1fr] sm:p-5">
-        <div className="flex items-center gap-4 sm:flex-col sm:items-center">
-          <ProgressRing pct={completion ?? 0} label={date === todayKey ? "今日完成" : "當日完成"} />
-          <div className="text-sm sm:text-center">
-            <p className="text-ink">
-              {doneCount}/{items.length} 項完成
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {formatMinutes(Math.round(doneMin))} / {formatMinutes(totalMin)}
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">依每項的預估時間加權</p>
-          </div>
-        </div>
-        <div className="min-w-0">
-          <div className="mb-2 flex items-baseline justify-between">
-            <h3 className="text-sm font-medium text-ink">本週每日完成率</h3>
-            <span className="text-sm text-muted-foreground">
-              本週 <span className="font-display text-xl tabular-nums text-ink">{Math.round(weekPct)}</span>%
-            </span>
-          </div>
-          <BarChart
-            data={week.map((w) => ({
-              key: w.key,
-              label: w.label,
-              value: w.pct,
-              highlight: w.current,
-              tip: w.pct === null ? (w.key > todayKey ? "還沒到" : "沒有計畫") : `${Math.round(w.pct)}%・${formatMinutes(Math.round(w.done))}`,
-            }))}
-            max={100}
-            height={120}
-            unit="%"
-          />
-          {byCategory.some((c) => c.value > 0) && (
-            <div className="mt-4">
-              <h3 className="mb-2 text-sm font-medium text-ink">時間分配</h3>
-              <SegmentBar segments={byCategory} format={(v) => formatMinutes(v)} />
-            </div>
-          )}
-        </div>
-      </section>
-
       <section className="space-y-2">
         <div className="flex items-center justify-between gap-2">
           <h3 className="font-display text-lg text-ink">要做的事</h3>
-          <div className="flex items-center gap-2">
-            {canAdjust && (
-              <Button
-                size="sm"
-                variant={adjusting ? "default" : "outline"}
-                aria-pressed={adjusting}
-                onClick={() => setAdjustingDate(adjusting ? null : date)}
-              >
-                {adjusting ? "完成" : "調整"}
-              </Button>
-            )}
-            {!readOnly && (
-              <Button size="sm" className="gap-1" onClick={() => setAdding({})}>
-                <Plus className="size-3.5" />
-                新增
-              </Button>
-            )}
-          </div>
+          {!readOnly && (
+            <Button size="sm" className="gap-1" onClick={() => setAdding({})}>
+              <Plus className="size-3.5" />
+              新增
+            </Button>
+          )}
         </div>
-        {adjusting && canAdjust && (
-          <p className="rounded-lg bg-soft px-3 py-2 text-xs leading-relaxed text-muted-foreground">
-            按住右邊的 ⋮⋮ 拖，或按 ↑↓ 換順序。時間會{isToday ? "從現在開始" : ""}自動一件接一件往下排，避開上課和行程；
-            📌 固定時間、已完成的事不會動。點一件事可以改時間長度或固定時間。
-          </p>
+        {overdue.length > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-amber-50 px-3 py-2.5 text-sm text-amber-900 ring-1 ring-amber-300/80">
+            <p>
+              有 {overdue.length} 件事已經過了時間還沒做完
+              <span className="block text-xs text-amber-800/80">
+                {overdue
+                  .slice(0, 2)
+                  .map((i) => `「${i.title}」`)
+                  .join("")}
+                {overdue.length > 2 && "等"}
+              </span>
+            </p>
+            <Button size="sm" onClick={rollForward}>
+              從現在往後排
+            </Button>
+          </div>
         )}
         {!readOnly && date === todayKey && shortfalls.length > 0 && (
           <div className="rounded-xl bg-amber-50 px-3 py-2.5 text-sm text-amber-900 ring-1 ring-amber-300/80">
@@ -679,6 +727,11 @@ export function TodayView({ me, isMine, color }: { me: string; isMine: boolean; 
             ))}
             <p className="mt-1 text-xs text-amber-800/80">可以在排程設定（齒輪）提高「每天讀書／寫作業最多」，或調整預估時間。</p>
           </div>
+        )}
+        {canFlow && movableOrder.length > 1 && (
+          <p className="text-[11px] text-muted-foreground">
+            按住右邊 ⋮⋮ 拖曳換順序，時間會{isToday ? "從現在起" : ""}自動接著排、避開上課和行程；📌 固定時間的事不會動。
+          </p>
         )}
         {!plan ? (
           <p className="rounded-2xl border border-dashed border-border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
@@ -692,21 +745,28 @@ export function TodayView({ me, isMine, color }: { me: string; isMine: boolean; 
           <DayRail
             items={items}
             pins={pins}
-            adjusting={adjusting && canAdjust}
+            canMove={canFlow}
             readOnly={readOnly}
             frac={frac}
             blockers={isFuture ? undefined : blockers}
-            dayEnd={toMinutes(settings.dayEnd)}
+            dayEnd={dayEndMin}
             now={flowNow}
             order={movableOrder}
             preview={(order) => timesFor(items, order)}
             gapActions={canFlow}
             flashId={flashId}
-            onReorder={(order) => flowPlan((list) => ({ items: list, order }))}
+            onReorder={(order, moved) =>
+              // Moving an item by hand overrides the earliest time it had.
+              flowPlan((base) => ({
+                items: base.items.map((i) => (i.id === moved && i.after ? { ...i, after: undefined } : i)),
+                order,
+              }))
+            }
             onOpen={(i) => setEditingId(i.id)}
             onCancelPin={readOnly ? undefined : cancelPin}
-            onFillGaps={canFlow ? () => flowPlan((list) => ({ items: list, fill: true })) : undefined}
+            onFillGaps={canFlow ? () => flowPlan((base) => ({ items: base.items, packed: true })) : undefined}
             onAddAt={readOnly || isPast ? undefined : (start) => setAdding({ start })}
+            onMoveAllTomorrow={!readOnly && isToday && unfit.length > 0 ? moveUnfitToTomorrow : undefined}
           />
         )}
         {!readOnly && held.length > 0 && (
@@ -733,6 +793,73 @@ export function TodayView({ me, isMine, color }: { me: string; isMine: boolean; 
         )}
       </section>
 
+      <section className="rounded-2xl border border-border/70 bg-card">
+        <button
+          type="button"
+          onClick={() => toggleOverview(!overviewOpen)}
+          aria-expanded={overviewOpen}
+          className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left sm:px-5"
+        >
+          <span>
+            <span className="font-display text-lg text-ink">總覽</span>
+            <span className="ml-2 text-xs text-muted-foreground">
+              {hasStrip ? "時間條・" : ""}本週 {Math.round(weekPct)}%・時間分配
+            </span>
+          </span>
+          <ChevronDown className={`size-4 shrink-0 text-muted-foreground transition-transform ${overviewOpen ? "rotate-180" : ""}`} />
+        </button>
+        {overviewOpen && (
+          <div className="space-y-5 border-t border-border/60 px-4 pb-4 pt-4 sm:px-5 sm:pb-5">
+            {hasStrip && (
+              <div>
+                <div className="mb-3 flex items-baseline justify-between gap-2">
+                  <h3 className="text-sm font-medium text-ink">時間條</h3>
+                  <p className="text-[11px] text-muted-foreground">粗線是行程・細線是要做的事，點一下跳過去</p>
+                </div>
+                <DayStrip
+                  items={items}
+                  pins={pins}
+                  color={color}
+                  colors={CATEGORY_COLOR}
+                  frac={frac}
+                  dayStart={dayStartMin}
+                  dayEnd={dayEndMin}
+                  now={isToday && clock >= 0 ? clock : null}
+                  onPick={pick}
+                />
+              </div>
+            )}
+            <div className="min-w-0">
+              <div className="mb-2 flex items-baseline justify-between">
+                <h3 className="text-sm font-medium text-ink">本週每日完成率</h3>
+                <span className="text-sm text-muted-foreground">
+                  本週 <span className="font-display text-xl tabular-nums text-ink">{Math.round(weekPct)}</span>%
+                </span>
+              </div>
+              <BarChart
+                data={week.map((w) => ({
+                  key: w.key,
+                  label: w.label,
+                  value: w.pct,
+                  highlight: w.current,
+                  tip: w.pct === null ? (w.key > todayKey ? "還沒到" : "沒有計畫") : `${Math.round(w.pct)}%・${formatMinutes(Math.round(w.done))}`,
+                }))}
+                max={100}
+                height={120}
+                unit="%"
+              />
+              <p className="mt-1 text-[11px] text-muted-foreground">完成率依每項的預估時間加權</p>
+            </div>
+            {byCategory.some((c) => c.value > 0) && (
+              <div>
+                <h3 className="mb-2 text-sm font-medium text-ink">時間分配</h3>
+                <SegmentBar segments={byCategory} format={(v) => formatMinutes(v)} />
+              </div>
+            )}
+          </div>
+        )}
+      </section>
+
       {editing && (
         <ItemPanel
           key={editing.id}
@@ -746,12 +873,12 @@ export function TodayView({ me, isMine, color }: { me: string; isMine: boolean; 
           future={isFuture}
           canMove={canFlow}
           onProgress={(p) => setProgress(editing, p)}
-          onSave={(next, follow) => {
-            saveFromPanel(editing, next, follow);
+          onSave={(next) => {
+            saveFromPanel(editing, next);
             setEditingId(null);
           }}
           onRemove={() => {
-            removeItem(editing);
+            removeWithUndo(editing);
             setEditingId(null);
           }}
           onMoveTomorrow={
@@ -772,7 +899,7 @@ export function TodayView({ me, isMine, color }: { me: string; isMine: boolean; 
           inPlan={new Set(items.flatMap((i) => (i.refId ? [i.refId] : [])))}
           onClose={() => setAdding(null)}
           onAdd={(i) => {
-            saveItem({ ...i, manual: true, pinned: !!i.start || undefined });
+            addItem(i);
             setAdding(null);
           }}
         />
@@ -786,6 +913,24 @@ export function TodayView({ me, isMine, color }: { me: string; isMine: boolean; 
             setSettingsOpen(false);
           }}
         />
+      )}
+      {undo && (
+        <div
+          role="status"
+          className="fixed inset-x-4 bottom-[calc(8.5rem+env(safe-area-inset-bottom))] z-[45] mx-auto flex max-w-md items-center gap-3 rounded-2xl bg-primary px-4 py-3 text-sm text-primary-foreground shadow-lg sm:bottom-6"
+        >
+          <span className="min-w-0 flex-1 truncate">{undo.label}</span>
+          <button
+            type="button"
+            className="shrink-0 font-medium underline underline-offset-2"
+            onClick={() => {
+              undo.restore();
+              setUndo(null);
+            }}
+          >
+            復原
+          </button>
+        </div>
       )}
     </div>
   );
@@ -810,6 +955,7 @@ function AddDialog({
   const [title, setTitle] = useState("");
   const [start, setStart] = useState(initialStart ?? "");
   const [minutes, setMinutes] = useState<number | null>(30);
+  const [fixed, setFixed] = useState(false);
   const all = openWork(date, school);
   const openRefs = new Set(all.map((w) => w.refId));
   // Only the next unit in line: the previous one is finished or already planned for the day.
@@ -873,6 +1019,21 @@ function AddDialog({
             <div className="grid gap-2">
               <Label htmlFor="add-start">開始時間（選填）</Label>
               <TimeField id="add-start" value={start} onChange={setStart} />
+              {parseTime(start) && (
+                <label className="flex items-center gap-1.5 text-xs text-ink">
+                  <input
+                    type="checkbox"
+                    checked={fixed}
+                    onChange={(e) => setFixed(e.target.checked)}
+                    className="size-3.5 accent-current"
+                  />
+                  固定這個時間
+                  <span className="text-muted-foreground">
+                    {fixed ? "・換順序時不會動" : "・不勾的話會從這之後開始，跟著順序移動"}
+                  </span>
+                </label>
+              )}
+              {!parseTime(start) && <p className="text-xs text-muted-foreground">不填會自動接在後面排</p>}
             </div>
           </div>
         )}
@@ -885,7 +1046,12 @@ function AddDialog({
             onClick={() => {
               const m = minutes ?? 30;
               const startOk = parseTime(start) ?? "";
-              if (tab === "school" && picked) onAdd({ ...workItem(picked, m), start: startOk });
+              const timing = {
+                start: fixed ? startOk : "",
+                pinned: fixed && !!startOk ? true : undefined,
+                after: !fixed && startOk ? startOk : undefined,
+              };
+              if (tab === "school" && picked) onAdd({ ...workItem(picked, m), ...timing });
               else
                 onAdd({
                   id: uid("pi"),
@@ -893,8 +1059,8 @@ function AddDialog({
                   title: title.trim(),
                   detail: "",
                   minutes: m,
-                  start: startOk,
                   progress: 0,
+                  ...timing,
                 });
             }}
           >

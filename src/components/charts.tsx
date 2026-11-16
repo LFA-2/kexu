@@ -16,6 +16,7 @@ export function ProgressRing({
   color = MAIN,
   label,
   sublabel,
+  compact = false,
 }: {
   pct: number;
   size?: number;
@@ -23,6 +24,8 @@ export function ProgressRing({
   color?: string;
   label?: string;
   sublabel?: string;
+  /** Small ring: just the number, sized to fit. */
+  compact?: boolean;
 }) {
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
@@ -53,9 +56,9 @@ export function ProgressRing({
         )}
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-        <span className="font-display text-3xl tabular-nums leading-none text-ink">
+        <span className={`font-display tabular-nums leading-none text-ink ${compact ? "text-sm" : "text-3xl"}`}>
           {Math.round(clamped)}
-          <span className="text-base">%</span>
+          <span className={compact ? "text-[9px]" : "text-base"}>%</span>
         </span>
         {label && <span className="mt-1 text-[11px] text-muted-foreground">{label}</span>}
         {sublabel && <span className="text-[10px] text-muted-foreground">{sublabel}</span>}

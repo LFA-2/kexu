@@ -18,6 +18,7 @@ import {
   type SchoolState,
 } from "@/lib/types";
 import { uid } from "@/lib/utils";
+import { reflow } from "@/lib/reflow";
 
 export const TODO_MINUTES = 30;
 export const ACTION_MINUTES = 30;
@@ -351,7 +352,11 @@ function buildDay(input: PlannerInput): { plan: DayPlan; shortfalls: Shortfall[]
   const wd = isoWeekday(parseISO(date));
   const isToday = date === toDateKey(new Date());
   const dismissed = new Set(existing?.dismissed ?? []);
-  const kept = (existing?.items ?? []).filter((i) => i.manual);
+  // 重新排 keeps only what the user decided: fixed times and things they added by hand.
+  // Everything else is planned again, so passed times and stale order don't stick.
+  const kept = (existing?.items ?? [])
+    .filter(keptOnReplan)
+    .map((i) => (i.pinned || sourceDone(i, school, life) ? i : { ...i, start: "" }));
   const keptRefs = new Set(kept.flatMap((i) => (i.refId ? [`${i.kind}:${i.refId}`] : [])));
   const skip = (kind: PlanItemKind, ref: string) =>
     dismissed.has(`${kind}:${ref}`) || keptRefs.has(`${kind}:${ref}`);
@@ -417,7 +422,8 @@ function buildDay(input: PlannerInput): { plan: DayPlan; shortfalls: Shortfall[]
   // Time available for school work today
   const dayStart = Math.max(toMinutes(settings.dayStart), input.fromMinute ?? 0);
   const dayEnd = toMinutes(settings.dayEnd);
-  const gaps = freeGaps(dayStart, dayEnd, busyIntervals(date, school, life));
+  const busy = busyIntervals(date, school, life);
+  const gaps = freeGaps(dayStart, dayEnd, busy);
   const free = gaps.reduce((a, [s, e]) => a + (e - s), 0);
   const fixedMinutes = [...fixed, ...kept].reduce((a, i) => a + i.minutes, 0);
   const capacity = Math.max(0, Math.min(settings.studyBudget, free - fixedMinutes));
@@ -513,7 +519,7 @@ function buildDay(input: PlannerInput): { plan: DayPlan; shortfalls: Shortfall[]
 
   // Regenerating keeps what was already done today.
   const before = new Map(
-    (existing?.items ?? []).filter((i) => !i.manual && i.refId).map((i) => [i.id, i]),
+    (existing?.items ?? []).filter((i) => !keptOnReplan(i) && i.refId).map((i) => [i.id, i]),
   );
   for (const item of [...fixed, ...schoolItems]) {
     const old = before.get(item.id);
@@ -528,23 +534,12 @@ function buildDay(input: PlannerInput): { plan: DayPlan; shortfalls: Shortfall[]
   const present = new Set([...fixed, ...schoolItems].map((i) => i.id));
   for (const [id, old] of before) {
     if (present.has(id)) continue;
-    const done =
-      old.kind === "homework"
-        ? school.homework.find((h) => h.id === old.refId)?.done
-        : old.kind === "unit"
-          ? school.progress.find((u) => u.id === old.refId)?.completed
-          : old.kind === "todo"
-            ? life.todos.find((t) => t.id === old.refId)?.done
-            : old.kind === "exam"
-              ? school.exams.find((e) => e.id === old.refId)?.done
-              : old.progress >= 100;
-    if (done) schoolItems.push({ ...old, progress: 100 });
+    if (sourceDone(old, school, life)) schoolItems.push({ ...old, progress: 100 });
   }
 
   const isReview = (i: PlanItem) => i.kind === "review";
   const items = [...kept, ...fixed.filter((i) => !isReview(i)), ...schoolItems, ...fixed.filter(isReview)];
-  const chainOf = new Map(open.map((w) => [w.refId, w.chain ?? w.refId]));
-  assignTimes(items, gaps, (i) => (i.refId && (i.kind === "unit" || i.kind === "homework") ? chainOf.get(i.refId) : undefined));
+  assignTimes(items, busy, dayStart, dayEnd, workChain(school));
   return {
     plan: {
       generatedAt: new Date().toISOString(),
@@ -574,35 +569,75 @@ export function planShortfalls(input: PlannerInput): Shortfall[] {
 }
 
 /**
- * Give untimed items a start time inside free gaps, around the timed ones. Items that
- * share a `group` (parts of one task, units of one course) keep their order in the day.
+ * Give untimed items a start time between `start` and `end`, around busy intervals and
+ * the items that already have a time. Items that share a chain (parts of one task, units
+ * of one course) keep their order. Items that don't fit stay untimed (今天排不下).
  */
-export function assignTimes(items: PlanItem[], gaps: Interval[], group?: (i: PlanItem) => string | undefined) {
-  const occupied: Interval[] = items
+export function assignTimes(
+  items: PlanItem[],
+  busy: Interval[],
+  start: number,
+  end: number,
+  chain?: (i: PlanItem) => { group: string; rank: number } | undefined,
+) {
+  const timed = items
     .filter((i) => i.start)
-    .map((i) => [toMinutes(i.start), toMinutes(i.start) + i.minutes]);
-  let free = gaps.flatMap(([s, e]) => freeGaps(s, e, occupied));
-  const after = new Map<string, number>();
+    .map((i): Interval => [toMinutes(i.start), toMinutes(i.start) + i.minutes]);
+  const times = reflow(
+    items
+      .filter((i) => !i.start && i.minutes > 0)
+      .map((i) => ({
+        id: i.id,
+        dur: i.minutes,
+        after: i.after ? toMinutes(i.after) : undefined,
+        group: chain?.(i)?.group,
+      })),
+    [...busy, ...timed],
+    start,
+    end,
+    true,
+  );
   for (const item of items) {
-    if (item.start || item.minutes <= 0) continue;
-    const g = group?.(item);
-    const from = g ? (after.get(g) ?? 0) : 0;
-    const fits = (need: number) => free.findIndex(([s, e]) => e - Math.max(s, from) >= need);
-    let idx = fits(item.minutes);
-    if (idx < 0) idx = fits(Math.min(item.minutes, 60));
-    if (idx < 0) continue;
-    const [gs, e] = free[idx];
-    const s = Math.max(gs, from);
-    item.start = hhmm(s);
-    const end = Math.min(e, s + item.minutes);
-    if (g) after.set(g, end);
-    free = [
-      ...free.slice(0, idx),
-      ...(s > gs ? [[gs, s] as Interval] : []),
-      ...(end + 10 < e ? [[end + 10, e] as Interval] : []),
-      ...free.slice(idx + 1),
-    ];
+    const t = times.get(item.id);
+    if (t !== undefined && !item.start) item.start = hhmm(t);
   }
+}
+
+/** Generated items have stable ids starting with "a:"; anything else was added by hand. */
+export const isHandAdded = (i: PlanItem) => !i.id.startsWith("a:");
+
+/** What 重新排 leaves alone. */
+const keptOnReplan = (i: PlanItem) => !!i.pinned || isHandAdded(i);
+
+/** Whether the thing behind an item is finished (falls back to the item's own progress). */
+function sourceDone(i: PlanItem, school: SchoolState, life: LifeState): boolean {
+  const done =
+    i.kind === "homework"
+      ? school.homework.find((h) => h.id === i.refId)?.done
+      : i.kind === "unit"
+        ? school.progress.find((u) => u.id === i.refId)?.completed
+        : i.kind === "todo"
+          ? life.todos.find((t) => t.id === i.refId)?.done
+          : i.kind === "exam"
+            ? school.exams.find((e) => e.id === i.refId)?.done
+            : undefined;
+  return !!done || i.progress >= 100;
+}
+
+/**
+ * Chains of school work that must stay in order: the parts of one task, and the study
+ * units of one course. Rank orders the members of a chain.
+ */
+export function workChain(school: SchoolState) {
+  const units = new Map(school.progress.map((u) => [u.id, u]));
+  return (i: PlanItem): { group: string; rank: number } | undefined => {
+    if (!i.refId) return undefined;
+    const part = Number(i.id.match(/#(\d+)$/)?.[1] ?? 1);
+    if (i.kind === "homework") return { group: `h:${i.refId}`, rank: part };
+    if (i.kind !== "unit") return undefined;
+    const u = units.get(i.refId);
+    return u ? { group: `c:${u.courseId}`, rank: u.order * 100 + part } : { group: `u:${i.refId}`, rank: part };
+  };
 }
 
 export const sortItems = (items: PlanItem[]) =>

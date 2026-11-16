@@ -6,16 +6,7 @@ import { CATEGORY_OF } from "@/lib/planner";
 import { hhmm } from "@/lib/reflow";
 import { formatMinutes } from "@/lib/types";
 import { SERIES } from "@/components/charts";
-import {
-  ArrowDown,
-  ArrowUp,
-  Check,
-  GripVertical,
-  Lock,
-  Pin,
-  Plus,
-  Rows3,
-} from "lucide-react";
+import { CalendarArrowUp, GripVertical, Lock, Pin, Plus, Rows3 } from "lucide-react";
 
 export const CATEGORY_COLOR = {
   school: SERIES[0],
@@ -54,13 +45,14 @@ type Mark =
   | { kind: "pin"; id: string; pin: RailPin; start: number; dur: number };
 
 /**
- * Today's list: compact rows in time order. In adjust mode the movable rows get a drag
- * handle and ↑↓ buttons; the order decides the times, which the parent works out.
+ * Today's list: compact rows in time order. Movable rows always have a drag handle
+ * (arrow keys work on it too); the order decides the times, which the parent works out.
+ * Items that got no time are listed at the end as 排不下.
  */
 export function DayRail({
   items,
   pins,
-  adjusting,
+  canMove,
   readOnly,
   frac,
   blockers,
@@ -75,10 +67,12 @@ export function DayRail({
   onCancelPin,
   onFillGaps,
   onAddAt,
+  onMoveAllTomorrow,
 }: {
   items: PlanItem[];
   pins: RailPin[];
-  adjusting: boolean;
+  /** Order can be changed (today and earlier days the user owns). */
+  canMove: boolean;
   readOnly: boolean;
   frac: (i: PlanItem) => number;
   blockers?: Map<string, string>;
@@ -91,11 +85,14 @@ export function DayRail({
   preview: (order: string[]) => Map<string, number>;
   gapActions: boolean;
   flashId: string | null;
-  onReorder: (order: string[]) => void;
+  /** `moved` is the item the user dragged or moved with the keys. */
+  onReorder: (order: string[], moved: string) => void;
   onOpen: (i: PlanItem) => void;
   onCancelPin?: (id: string) => void;
   onFillGaps?: () => void;
   onAddAt?: (start: string) => void;
+  /** Send every unfinished item that didn't fit to tomorrow. */
+  onMoveAllTomorrow?: () => void;
 }) {
   const listRef = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<{ id: string; order: string[] } | null>(null);
@@ -108,12 +105,18 @@ export function DayRail({
 
   const marks: Mark[] = [
     ...items.map((item) => {
-      const t = times?.get(item.id);
+      // While dragging, movable items take the previewed time; none means it won't fit.
+      const start =
+        times && movable.has(item.id)
+          ? (times.get(item.id) ?? null)
+          : item.start
+            ? toMinutes(item.start)
+            : null;
       return {
         kind: "task" as const,
         id: item.id,
         item,
-        start: t ?? (item.start ? toMinutes(item.start) : null),
+        start,
         dur: Math.max(5, item.minutes),
       };
     }),
@@ -147,6 +150,7 @@ export function DayRail({
     if (mark.start !== null) prevEnd = Math.max(prevEnd ?? 0, mark.start + mark.dur);
   }
   const firstUntimed = rows.findIndex((r) => r.type === "mark" && r.mark.start === null);
+  const untimedOpen = items.filter((i) => !i.start && frac(i) < 1).length;
 
   function move(id: string, d: number) {
     const k = order.indexOf(id);
@@ -154,7 +158,7 @@ export function DayRail({
     if (k < 0 || j < 0 || j >= order.length) return;
     const next = [...order];
     [next[k], next[j]] = [next[j], next[k]];
-    onReorder(next);
+    onReorder(next, id);
   }
 
   function beginDrag(e: React.PointerEvent, id: string) {
@@ -185,7 +189,7 @@ export function DayRail({
       window.removeEventListener("pointerup", finish);
       window.removeEventListener("pointercancel", finish);
       setDrag(null);
-      if (latest.join() !== order.join()) onReorder(latest);
+      if (latest.join() !== order.join()) onReorder(latest, id);
     }
     window.addEventListener("pointermove", place, { passive: false });
     window.addEventListener("pointerup", finish);
@@ -193,7 +197,7 @@ export function DayRail({
   }
 
   return (
-    <div ref={listRef} data-mode={adjusting ? "adjust" : "view"} className="relative">
+    <div ref={listRef} className="relative">
       <div className="absolute bottom-1 top-1 w-px bg-border" style={{ left: AXIS.pole }} />
       <div className="space-y-2">
         {rows.map((row, index) => {
@@ -253,9 +257,24 @@ export function DayRail({
           return (
             <div key={row.key}>
               {index === firstUntimed && (
-                <p className="pb-2 text-xs text-muted-foreground" style={{ paddingLeft: AXIS.card }}>
-                  還沒排時間
-                </p>
+                <div
+                  className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 pb-2 pt-1"
+                  style={{ paddingLeft: AXIS.card }}
+                >
+                  <p className="text-xs text-muted-foreground">
+                    {untimedOpen > 0 ? "今天排不下・可以拖到前面、縮短時間，或移到明天" : "沒有排時間"}
+                  </p>
+                  {onMoveAllTomorrow && untimedOpen > 0 && !drag && (
+                    <button
+                      type="button"
+                      className="flex items-center gap-1 rounded-full border border-border/80 bg-card px-3 py-1 text-xs text-ink hover:bg-soft"
+                      onClick={onMoveAllTomorrow}
+                    >
+                      <CalendarArrowUp className="size-3.5" />
+                      全部移到明天
+                    </button>
+                  )}
+                </div>
               )}
               <div className="relative" style={{ paddingLeft: AXIS.card }}>
                 {mark.start !== null && (
@@ -280,10 +299,14 @@ export function DayRail({
                     fraction={frac(mark.item)}
                     waitFor={mark.item.kind === "unit" && mark.item.refId ? blockers?.get(mark.item.refId) : undefined}
                     over={mark.start !== null && mark.start + mark.item.minutes > dayEnd ? hhmm(dayEnd) : null}
-                    adjusting={adjusting && !readOnly}
-                    movable={movable.has(mark.id)}
-                    first={current[0] === mark.id}
-                    last={current[current.length - 1] === mark.id}
+                    past={
+                      now !== null &&
+                      mark.start !== null &&
+                      !mark.item.pinned &&
+                      mark.start + mark.item.minutes <= now &&
+                      frac(mark.item) < 1
+                    }
+                    draggable={canMove && !readOnly && movable.has(mark.id)}
                     dragging={drag?.id === mark.id}
                     flash={flashId === mark.id}
                     onOpen={() => onOpen(mark.item)}
@@ -292,10 +315,7 @@ export function DayRail({
                     onGrab={(e) => beginDrag(e, mark.id)}
                   />
                 ) : (
-                  <PinCard
-                    pin={mark.pin}
-                    onCancel={!adjusting && onCancelPin ? () => onCancelPin(mark.id) : undefined}
-                  />
+                  <PinCard pin={mark.pin} onCancel={!drag && onCancelPin ? () => onCancelPin(mark.id) : undefined} />
                 )}
               </div>
             </div>
@@ -313,10 +333,8 @@ function TaskRow({
   fraction,
   waitFor,
   over,
-  adjusting,
-  movable,
-  first,
-  last,
+  past,
+  draggable,
   dragging,
   flash,
   onOpen,
@@ -330,10 +348,9 @@ function TaskRow({
   fraction: number;
   waitFor?: string;
   over: string | null;
-  adjusting: boolean;
-  movable: boolean;
-  first: boolean;
-  last: boolean;
+  /** Its time is over and it isn't done (and not fixed). */
+  past: boolean;
+  draggable: boolean;
   dragging: boolean;
   flash: boolean;
   onOpen: () => void;
@@ -350,7 +367,7 @@ function TaskRow({
       : undefined;
   const border = dragging
     ? "border-chip shadow-md"
-    : over
+    : over || past
       ? "border-amber-400"
       : flash
         ? "border-chip ring-2 ring-chip/40"
@@ -363,7 +380,7 @@ function TaskRow({
       data-task={item.title}
       data-task-id={item.id}
       data-start={start === null ? "" : hhmm(start)}
-      {...(movable && adjusting ? { "data-movable": item.id } : {})}
+      {...(draggable ? { "data-movable": item.id } : {})}
       className={`flex items-stretch overflow-hidden rounded-xl border bg-card transition-shadow ${border}`}
       style={{ backgroundImage: fill }}
     >
@@ -374,54 +391,36 @@ function TaskRow({
           </span>
           {item.pinned && <Pin className="size-3 shrink-0 text-muted-foreground" aria-label="固定時間" />}
           {waitFor && <Lock className="size-3 shrink-0 text-muted-foreground" aria-label={`等「${waitFor}」`} />}
-          <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+          <span className={`shrink-0 text-xs tabular-nums ${past ? "text-amber-700" : "text-muted-foreground"}`}>
             {range || formatMinutes(item.minutes)}
           </span>
         </span>
-        {(adjusting || over) && (
-          <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
-            {formatMinutes(item.minutes)}
-            {over && <span className="text-amber-700">・超過 {over}</span>}
-            {adjusting && !movable && (done ? "・已完成" : item.pinned ? "・固定時間，不會移動" : "・正在做")}
+        {(over || past) && (
+          <span className="mt-0.5 block truncate text-[11px] text-amber-700">
+            {past ? "已經過了時間" : `超過 ${over}`}
           </span>
         )}
       </button>
-      {adjusting &&
-        (movable ? (
-          <span className="flex shrink-0 items-center border-l border-border/60">
-            <button
-              type="button"
-              onClick={onUp}
-              disabled={first}
-              className="flex h-full w-8 items-center justify-center text-muted-foreground hover:text-ink disabled:opacity-30"
-              aria-label={`${item.title} 往前`}
-            >
-              <ArrowUp className="size-4" />
-            </button>
-            <button
-              type="button"
-              onClick={onDown}
-              disabled={last}
-              className="flex h-full w-8 items-center justify-center text-muted-foreground hover:text-ink disabled:opacity-30"
-              aria-label={`${item.title} 往後`}
-            >
-              <ArrowDown className="size-4" />
-            </button>
-            <span
-              role="button"
-              tabIndex={-1}
-              aria-label={`拖曳 ${item.title}`}
-              onPointerDown={onGrab}
-              className="flex h-full w-9 cursor-grab touch-none items-center justify-center text-muted-foreground active:cursor-grabbing"
-            >
-              <GripVertical className="size-4" />
-            </span>
-          </span>
-        ) : (
-          <span className="flex w-9 shrink-0 items-center justify-center border-l border-border/60 text-muted-foreground">
-            {done ? <Check className="size-4" /> : <Pin className="size-4" />}
-          </span>
-        ))}
+      {draggable && (
+        <span
+          role="button"
+          tabIndex={0}
+          aria-label={`拖曳 ${item.title}，或用上下鍵換順序`}
+          onPointerDown={onGrab}
+          onKeyDown={(e) => {
+            if (e.key === "ArrowUp") {
+              e.preventDefault();
+              onUp();
+            } else if (e.key === "ArrowDown") {
+              e.preventDefault();
+              onDown();
+            }
+          }}
+          className="flex w-10 shrink-0 cursor-grab touch-none items-center justify-center border-l border-border/60 text-muted-foreground hover:text-ink focus-visible:text-ink active:cursor-grabbing"
+        >
+          <GripVertical className="size-4" />
+        </span>
+      )}
     </div>
   );
 }

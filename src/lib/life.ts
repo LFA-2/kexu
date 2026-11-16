@@ -124,10 +124,15 @@ export type PlanItem = {
   base?: number;
   /** How many source progress points today's portion is worth; homework/unit only */
   share?: number;
-  /** Added or edited by hand, kept when the plan is regenerated */
+  /**
+   * Legacy: older versions set this on every item the user touched, which froze them on
+   * 重新排. No longer read; hand-added items are told apart by their id (see isHandAdded).
+   */
   manual?: boolean;
   /** Time fixed by the user: reordering flows the other items around it */
   pinned?: boolean;
+  /** HH:mm the item should not start before ("不早於"); it still moves with the order. */
+  after?: string;
 };
 
 export type DayPlan = {

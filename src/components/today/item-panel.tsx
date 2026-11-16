@@ -51,7 +51,7 @@ export function ItemPanel({
   /** Today: times flow, and the item can go to tomorrow. */
   canMove: boolean;
   onProgress: (pct: number) => void;
-  /** follow: drop the fixed time and let it sit right after the item before it */
+  /** follow: drop the fixed or earliest time and let it sit right after the item before it */
   onSave: (item: PlanItem, follow: boolean) => void;
   onRemove: () => void;
   onMoveTomorrow?: () => void;
@@ -87,12 +87,14 @@ export function ItemPanel({
     const base = parseTime(start) ?? item.start;
     const m = base ? toMinutes(base) : 9 * 60;
     setStart(hhmm(Math.min(23 * 60 + 55, Math.max(0, Math.round((m + d) / 5) * 5))));
-    setPinned(true);
     setFollow(false);
   }
 
   const startOk = parseTime(start);
   const end = startOk && minutes ? hhmm(toMinutes(startOk) + minutes) : "";
+  const timeChanged = (startOk ?? "") !== item.start;
+  /** "不早於" in effect after saving, when the time isn't fixed. */
+  const floor = follow || pinned ? null : timeChanged ? startOk : (item.after ?? null);
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
@@ -175,10 +177,7 @@ export function ItemPanel({
                     <TimeField
                       id="pi-start"
                       value={start}
-                      onChange={(v) => {
-                        setStart(v);
-                        setPinned(true);
-                      }}
+                      onChange={setStart}
                     />
                   </div>
                   <Button type="button" variant="outline" size="sm" className="tabular-nums" onClick={() => nudge(15)}>
@@ -186,9 +185,18 @@ export function ItemPanel({
                   </Button>
                 </div>
               )}
+              {canMove && !follow && (
+                <p className="text-[11px] leading-relaxed text-muted-foreground">
+                  {pinned
+                    ? "固定在這個時間，換順序時不會動，其他事會繞開它。"
+                    : floor
+                      ? `會從 ${floor} 之後開始；之後換順序它還是會跟著移動。`
+                      : "照順序自動接著排。改時間會讓它從那之後開始；要釘死請勾「固定」。"}
+                </p>
+              )}
               {canMove && (
                 <div className="flex flex-wrap items-center gap-2">
-                  {!follow && (
+                  {!follow && (item.pinned || item.after || pinned || timeChanged) && (
                     <button
                       type="button"
                       className="rounded-full border border-border/80 px-3 py-1 text-xs text-ink hover:bg-soft"
@@ -209,7 +217,7 @@ export function ItemPanel({
                       className="size-3.5 accent-current"
                     />
                     <Pin className="size-3" />
-                    固定這個時間（換順序時不移動）
+                    固定這個時間
                   </label>
                 </div>
               )}
@@ -236,7 +244,7 @@ export function ItemPanel({
                 variant="ghost"
                 className="text-muted-foreground hover:text-destructive"
                 onClick={() => {
-                  if (confirm(`拿掉「${item.title}」？重新排不會再把它加回來。`)) onRemove();
+                  onRemove();
                 }}
               >
                 <Trash2 className="size-3.5" />
@@ -268,7 +276,8 @@ export function ItemPanel({
                       start: follow ? item.start : (startOk ?? ""),
                       minutes: m,
                       share,
-                      pinned: !follow && pinned && !!startOk,
+                      pinned: !follow && pinned && !!startOk ? true : undefined,
+                      after: floor ?? undefined,
                     },
                     follow,
                   );
