@@ -290,24 +290,19 @@ function GradeBadge({ grade }: { grade: Grade | undefined }) {
   );
 }
 
-/** One line of review under a guess: judged on what it could be expected to rule out. */
+/** Under a guess: the best guess at that point and how far it could have narrowed things. */
 function ReviewLine({ review }: { review: Shown | null | undefined }) {
   if (review === undefined) return <p className="text-[11px] text-muted-foreground">分析中…</p>;
   if (review === null) return null;
-  return (
-    <p className="text-[11px] leading-snug text-muted-foreground">
-      猜之前約 {fmtCount(review.before)} 種・這次預期剩 <span className="tabular-nums text-ink">{fmtCount(review.played)}</span>
-      {review.optimal ? (
-        <span className="ml-1 inline-flex items-center gap-0.5 text-primary">
-          <Check className="size-3" />
-          最佳
-        </span>
-      ) : (
-        <>
-          ・最佳 <span className="font-medium tracking-wider tabular-nums text-ink">{review.best}</span> 預期剩{" "}
-          <span className="tabular-nums text-ink">{fmtCount(review.bestExpected)}</span>
-        </>
-      )}
+  return review.optimal ? (
+    <p className="inline-flex items-center gap-0.5 text-[11px] text-primary">
+      <Check className="size-3" />
+      已是最佳
+    </p>
+  ) : (
+    <p className="text-[11px] text-muted-foreground">
+      最佳 <span className="font-medium tracking-wider tabular-nums text-ink">{review.best}</span> 可降至約{" "}
+      <span className="tabular-nums text-ink">{fmtCount(review.bestExpected)}</span>
     </p>
   );
 }
@@ -324,7 +319,10 @@ function GuessList({ guesses }: { guesses: Guess[] }) {
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2.5">
                 <GradeBadge grade={reviews[i]?.grade} />
-                <span className="font-display text-lg tracking-[0.3em] tabular-nums text-ink">{g.guess}</span>
+                <span className="w-18 shrink-0 font-display text-lg tracking-[0.3em] tabular-nums text-ink">{g.guess}</span>
+                {reviews[i] && (
+                  <span className="text-[11px] tabular-nums text-muted-foreground">剩約 {fmtCount(reviews[i]!.played)}</span>
+                )}
                 <span className="ml-auto text-sm font-medium tabular-nums">
                   <span className="text-primary">{g.a}A</span>
                   <span className="text-amber-700">{g.b}B</span>
