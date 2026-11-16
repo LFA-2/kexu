@@ -8,8 +8,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatShortDate } from "@/lib/dates";
 import { describeError } from "@/lib/supabase";
+import type { TurnReview } from "@/lib/ab-solver";
 import { useAbGame, type Guess, type PastGuess } from "@/store/ab-game";
-import { ArrowLeft } from "lucide-react";
+import { useAbReviews } from "@/store/ab-review";
+import { ArrowLeft, Check } from "lucide-react";
 
 const GUESS_ERRORS = {
   invalid: "請輸入 4 位數字。",
@@ -234,23 +236,57 @@ function MySecretCard({
   );
 }
 
+const fmtCount = (n: number) => (n < 10 ? n.toFixed(1).replace(/\.0$/, "") : Math.round(n).toLocaleString());
+
+/** One line of review under a guess: judged on what it could be expected to rule out. */
+function ReviewLine({ review }: { review: TurnReview | null | undefined }) {
+  if (review === undefined) return <p className="text-[11px] text-muted-foreground">分析中…</p>;
+  if (review === null) return null;
+  const left = review.before === 1 ? "只剩 1 種可能" : `猜之前剩 ${review.before.toLocaleString()} 種`;
+  return (
+    <p className="text-[11px] leading-snug text-muted-foreground">
+      {left}・這次預期剩 <span className="tabular-nums text-ink">{fmtCount(review.played)}</span>
+      {review.optimal ? (
+        <span className="ml-1 inline-flex items-center gap-0.5 text-primary">
+          <Check className="size-3" />
+          最佳
+        </span>
+      ) : (
+        <>
+          ・最佳 <span className="font-medium tracking-wider tabular-nums text-ink">{review.best}</span> 預期剩{" "}
+          <span className="tabular-nums text-ink">{fmtCount(review.bestExpected)}</span>
+        </>
+      )}
+    </p>
+  );
+}
+
 function GuessList({ guesses }: { guesses: Guess[] }) {
+  const reviews = useAbReviews(guesses);
   if (guesses.length === 0) return null;
   return (
-    <ol className="space-y-1.5">
-      {guesses.map((g, i) => (
-        <li key={g.id} className="flex items-center gap-3">
-          <span className="w-6 text-right text-xs tabular-nums text-muted-foreground">{i + 1}</span>
-          <span className="font-display text-lg tracking-[0.3em] tabular-nums text-ink">
-            {g.guess}
-          </span>
-          <span className="ml-auto text-sm font-medium tabular-nums">
-            <span className="text-primary">{g.a}A</span>
-            <span className="text-amber-700">{g.b}B</span>
-          </span>
-        </li>
-      ))}
-    </ol>
+    <div className="space-y-2">
+      <ol className="space-y-2">
+        {guesses.map((g, i) => (
+          <li key={g.id} className="flex items-start gap-3">
+            <span className="w-6 pt-1 text-right text-xs tabular-nums text-muted-foreground">{i + 1}</span>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-3">
+                <span className="font-display text-lg tracking-[0.3em] tabular-nums text-ink">{g.guess}</span>
+                <span className="ml-auto text-sm font-medium tabular-nums">
+                  <span className="text-primary">{g.a}A</span>
+                  <span className="text-amber-700">{g.b}B</span>
+                </span>
+              </div>
+              <ReviewLine review={reviews[i]} />
+            </div>
+          </li>
+        ))}
+      </ol>
+      <p className="text-[11px] leading-relaxed text-muted-foreground">
+        檢討：以猜之前的線索，算這一手平均會剩幾種可能（越少越好），以及當時能剩最少的猜法。看的是預期的資訊量，不是運氣好壞。
+      </p>
+    </div>
   );
 }
 
